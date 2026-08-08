@@ -9,10 +9,13 @@ dashboard** y no queda reflejado en ningún fichero, de ahí esta nota.
 1. **Authentication → Sign In / Providers → Email**
    - "Allow new users to sign up" → **OFF**. Es la primera de las tres capas que cierran el acceso
      (las otras dos: el cliente no expone `signUp`, y la RLS filtra por `user_id = auth.uid()`).
-   - "Confirm email" puede quedarse como esté: sin registros públicos no hay correos que confirmar.
+   - "Confirm email" → **OFF** (estado actual del proyecto). Ojo con el nombre del flag en la API:
+     desactivar ese toggle deja `mailer_autoconfirm: true`, o sea *auto-confirmar*, no *pedir
+     confirmación*. Sin registros públicos no hay correos que confirmar, así que no abre nada.
 2. **Authentication → Users → Add user → Create new user**
    - Correo y contraseña del propietario.
-   - **Marcar "Auto Confirm User"**. Sin esto el usuario nace sin confirmar y el login falla con
+   - Con "Confirm email" en OFF el usuario ya nace confirmado y el checkbox "Auto Confirm User" da
+     igual. Si algún día se vuelve a exigir confirmación, hay que marcarlo: si no, el login falla con
      `email_not_confirmed`, que en la app se ve como el mensaje genérico "No se ha podido iniciar
      sesión" (el código real se registra en la consola).
 3. **Cambiar la contraseña / recuperarla**: desde este mismo panel (Users → ⋮ → Reset password). La
