@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/charts.tsx","./src/calculations.test.ts","./src/calculations.ts","./src/data.ts","./src/db.test.ts","./src/db.ts","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/test/setup.ts"],"version":"6.0.3"}
