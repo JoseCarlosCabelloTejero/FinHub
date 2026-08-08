@@ -15,7 +15,10 @@ schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
 # for accidental or malicious requests.
-max_rows = 1000
+# Subido desde 1000: el sync hace pull COMPLETO sin paginar y PostgREST trunca en
+# silencio, sin error. Con 1000, pasar de mil movimientos vaciaria el historico del
+# cliente sin avisar. Hay que replicar este valor en el dashboard del proyecto remoto.
+max_rows = 100000
 # Controls whether new tables, views, sequences and functions created in the `public` schema by
 # `postgres` are reachable through the Data API roles (`anon`, `authenticated`, `service_role`)
 # without explicit GRANTs. When unset, new entities are NOT auto-exposed, matching the new cloud
@@ -406,8 +409,13 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 # pg-delta is the schema diff engine for db diff / db pull / db remote commit.
 # Set enabled = false to fall back to the legacy migra engine.
+# Desactivado: con enabled = true, `supabase start` y `db reset` se cuelgan
+# indefinidamente extrayendo el catalogo (el worker de edge-runtime no cierra el
+# event loop; el bug esta descrito en el propio script del contenedor,
+# supabase/pg-toolbelt#312). No lo necesitamos: el esquema se versiona a mano en
+# supabase/migrations/, no con schema declarativo ni con db diff.
 [experimental.pgdelta]
-enabled = true
+enabled = false
 # Directory under `supabase/` where declarative files are written.
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
