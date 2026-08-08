@@ -1,15 +1,27 @@
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { money } from './calculations';
+import { theme } from './theme';
 
-const colors = ['#55c2ff','#4f8cff','#47d7ac','#ffc857','#ff7a90','#9575ff','#70e1f5','#b7e565','#f09cff','#79a8ff'];
-const tooltip = { contentStyle: { background: '#111c2d', border: '1px solid #263a55', borderRadius: 12 }, formatter: (value: any) => money.format(Number(Array.isArray(value) ? value[0] : value ?? 0)) };
+// Etiquetas del eje Y compactas ("1,8 mil €"): con 60px por defecto recharts se comía
+// casi el 20% del ancho en un móvil de 320px. De ahí el width fijo más estrecho.
+const compact = new Intl.NumberFormat('es-ES', { notation: 'compact', maximumFractionDigits: 1 });
+const axis = { stroke: theme.line, tick: { fill: theme.muted, fontSize: 12 }, tickMargin: 6 };
+const xAxis = { ...axis, dataKey: 'name', minTickGap: 12, interval: 'preserveStartEnd' as const };
+const yAxis = { ...axis, width: 46, tickFormatter: (v: number) => `${compact.format(v)}€` };
+const legend = { wrapperStyle: { color: theme.muted, fontSize: 12 } };
+const tooltip = { contentStyle: { background: theme.surface, border: `1px solid ${theme.line}`, borderRadius: 12, color: theme.text, boxShadow: '0 8px 24px #0000001a' }, formatter: (value: any) => money.format(Number(Array.isArray(value) ? value[0] : value ?? 0)) };
+// La altura vive en CSS (`.chart-box`) y no en la prop `height`, para poder bajarla en móvil
+// y en landscape sin duplicar aquí los breakpoints.
+const Box = ({children}:{children:React.ReactNode}) => <div className="chart-box">{children}</div>;
 
 export function TrendChart({data}:{data:{name:string;ingresos:number;gastos:number;ahorro:number}[]}) {
-  return <ResponsiveContainer width="100%" height={280}><LineChart data={data}><CartesianGrid stroke="#20324a" vertical={false}/><XAxis dataKey="name" stroke="#7f92aa"/><YAxis stroke="#7f92aa" tickFormatter={(v)=>`${v}€`}/><Tooltip {...tooltip}/><Legend/><Line dataKey="ingresos" stroke="#47d7ac" strokeWidth={3} dot={false}/><Line dataKey="gastos" stroke="#ff7a90" strokeWidth={3} dot={false}/><Line dataKey="ahorro" stroke="#55c2ff" strokeWidth={3} dot={false}/></LineChart></ResponsiveContainer>;
+  return <Box><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><CartesianGrid stroke={theme.line} vertical={false}/><XAxis {...xAxis}/><YAxis {...yAxis}/><Tooltip {...tooltip}/><Legend {...legend}/><Line dataKey="ingresos" stroke={theme.income} strokeWidth={3} dot={false} activeDot={{r:4}}/><Line dataKey="gastos" stroke={theme.expense} strokeWidth={3} dot={false} activeDot={{r:4}}/><Line dataKey="ahorro" stroke={theme.text} strokeWidth={3} dot={false} activeDot={{r:4}}/></LineChart></ResponsiveContainer></Box>;
 }
 export function ExpenseChart({data}:{data:{name:string;value:number}[]}) {
-  return <ResponsiveContainer width="100%" height={280}><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius={62} outerRadius={96} paddingAngle={3}>{data.map((_,i)=><Cell key={i} fill={colors[i%colors.length]}/>)}</Pie><Tooltip {...tooltip}/><Legend verticalAlign="bottom" height={36}/></PieChart></ResponsiveContainer>;
+  // Radios en % y leyenda sin `height` fija: en px el donut no encogía y los 6 nombres de
+  // categoría (CATEGORY_LIMIT) se salían de la caja de 36px al envolver en pantallas estrechas.
+  return <Box><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="80%" paddingAngle={3}>{data.map((_,i)=><Cell key={i} fill={theme.ramp[i%theme.ramp.length]} stroke={theme.surface} strokeWidth={2}/>)}</Pie><Tooltip {...tooltip}/><Legend verticalAlign="bottom" {...legend}/></PieChart></ResponsiveContainer></Box>;
 }
 export function WeeklyChart({data}:{data:{name:string;ingresos:number;gastos:number}[]}) {
-  return <ResponsiveContainer width="100%" height={280}><BarChart data={data}><CartesianGrid stroke="#20324a" vertical={false}/><XAxis dataKey="name" stroke="#7f92aa"/><YAxis stroke="#7f92aa" tickFormatter={(v)=>`${v}€`}/><Tooltip {...tooltip}/><Legend/><Bar dataKey="ingresos" fill="#47d7ac" radius={[5,5,0,0]}/><Bar dataKey="gastos" fill="#ff7a90" radius={[5,5,0,0]}/></BarChart></ResponsiveContainer>;
+  return <Box><ResponsiveContainer width="100%" height="100%"><BarChart data={data}><CartesianGrid stroke={theme.line} vertical={false}/><XAxis {...xAxis}/><YAxis {...yAxis}/><Tooltip {...tooltip}/><Legend {...legend}/><Bar dataKey="ingresos" fill={theme.income} radius={[5,5,0,0]}/><Bar dataKey="gastos" fill={theme.expense} radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></Box>;
 }
