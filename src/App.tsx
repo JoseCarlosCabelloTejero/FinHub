@@ -1,11 +1,13 @@
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, BarChart3, CalendarRange, ChevronDown, ChevronUp, CirclePlus, LayoutDashboard, List, Pencil, Plus, Search, Settings2, Table2, Trash2, WalletCards, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, BarChart3, CalendarRange, ChevronDown, ChevronUp, CirclePlus, LayoutDashboard, List, LogOut, Pencil, Plus, Search, Settings2, Table2, Trash2, WalletCards, X } from 'lucide-react';
 import { addMonths, addYears, format, parseISO, subMonths, subYears } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { categoryData, filterPeriod, money, percent, summary, topCategories, trendData, weeklyBreakdown } from './calculations';
 import type { WeeklyRow } from './calculations';
 import { CATEGORY_LIMIT } from './theme';
 import { bootstrapData, clearAllData, getAllData, loadPreferences, removeMovement, saveCategory, saveMovement, savePreferences } from './db';
+import { onAuthChange, resolveUserId, signOut } from './supabase';
+import Login from './Login';
 import type { Category, Movement, MovementType, Preferences } from './types';
 const TrendChart = lazy(() => import('./Charts').then(m=>({default:m.TrendChart})));
 const ExpenseChart = lazy(() => import('./Charts').then(m=>({default:m.ExpenseChart})));
@@ -18,7 +20,22 @@ type Page = typeof pages[number][0];
 const today = format(new Date(),'yyyy-MM-dd');
 const blank = (): Omit<Movement,'id'|'createdAt'|'updatedAt'> => ({type:'expense',amount:0,date:today,categoryId:'',concept:'',notes:''});
 
+// Gate de sesión. Vive en su propio componente porque los hooks de Finances no pueden ser
+// condicionales: sin sesión ni siquiera se monta, así que tampoco se siembran las categorías por
+// defecto (bootstrapData) antes de saber qué hay en el servidor.
 export default function App() {
+  const [userId,setUserId]=useState<string|null|undefined>(undefined); // undefined = comprobando
+  // El `prev===undefined` es la carrera real: si el usuario entra mientras resolveUserId sigue en
+  // vuelo, SIGNED_IN ya habría fijado el id y la resolución inicial (null) lo pisaría devolviéndolo
+  // al login. La suscripción manda; resolveUserId solo rellena el hueco inicial.
+  useEffect(()=>{resolveUserId().then(id=>setUserId(prev=>prev===undefined?id:prev));return onAuthChange(setUserId)},[]);
+  if(userId===undefined)return <div className="loading">Comprobando tu sesión…</div>;
+  if(userId===null)return <Login/>;
+  // key: cambiar de usuario remonta el árbol entero, así ningún estado sobrevive al cambio.
+  return <Finances key={userId}/>;
+}
+
+function Finances() {
   const [page,setPage]=useState<Page>('summary'); const [movements,setMovements]=useState<Movement[]>([]); const [categories,setCategories]=useState<Category[]>([]); const [prefs,setPrefs]=useState<Preferences>({periodMode:'month',selectedDate:today}); const [loading,setLoading]=useState(true); const [notice,setNotice]=useState(''); const [modal,setModal]=useState(false); const [editing,setEditing]=useState<Movement|null>(null);
   const reload=async()=>{const data=await getAllData();setMovements(data.movements);setCategories(data.categories.sort((a,b)=>a.order-b.order));};
   useEffect(()=>{(async()=>{await bootstrapData();await reload();const saved=await loadPreferences();if(saved)setPrefs(saved);setLoading(false)})()},[]);
@@ -30,7 +47,7 @@ export default function App() {
   const deleteOne=async(m:Movement)=>{if(confirm(`¿Eliminar “${m.concept}”? Esta acción no se puede deshacer.`)){await removeMovement(m.id);await reload();flash('Movimiento eliminado')}};
   if(loading)return <div className="loading">Preparando tu espacio financiero…</div>;
   return <div className="app-shell">
-    <aside><div className="brand"><span><WalletCards/></span><div><b>Cielo</b><small>Finanzas personales</small></div></div><nav>{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><div className="aside-note"><span>Datos privados</span><p>Todo permanece en este navegador.</p></div></aside>
+    <aside><div className="brand"><span><WalletCards/></span><div><b>Cielo</b><small>Finanzas personales</small></div></div><nav>{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><div className="aside-note"><span>Datos privados</span><p>Todo permanece en este navegador.</p><button className="sign-out" onClick={()=>signOut()}><LogOut/>Cerrar sesión</button></div></aside>
     <main><header><div><span className="eyebrow">Tu dinero, con claridad</span><h1>{pages.find(p=>p[0]===page)![3]}</h1></div>{page!=='categories'&&<button className="primary" onClick={()=>openForm()}><Plus/>Nuevo movimiento</button>}</header>
     {page==='summary'&&<Summary prefs={prefs} setPrefs={setPrefs} totals={totals} items={inPeriod} categories={categories}/>}
     {page==='weekly'&&<Weekly prefs={prefs} setPrefs={setPrefs} movements={movements} categories={categories}/>}

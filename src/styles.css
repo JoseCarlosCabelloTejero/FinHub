@@ -168,6 +168,20 @@ nav svg { width: 19px }
   line-height: 1.5;
   margin: 7px 0 0;
 }
+.aside-note .sign-out {
+  margin-top: 12px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.aside-note .sign-out:hover { color: var(--text) }
+.aside-note .sign-out svg { width: 14px }
 
 /* ============================ Botones ============================ */
 
@@ -559,6 +573,36 @@ td small { display: block; color: var(--muted); margin-top: 3px }
 
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px }
 .form-error { color: var(--expense); font-size: 12px }
+
+/* ============================= Login ============================= */
+
+.login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.login form {
+  width: min(400px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 26px;
+}
+.login .brand { margin-bottom: 34px }
+.login h1 { font-size: 25px; letter-spacing: -.03em; margin: 5px 0 22px }
+/* No se puede reutilizar `.modal form > label`: ese selector está scopeado al modal. Mismos valores. */
+.login label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 14px 0;
+}
+.login .primary { width: 100%; margin-top: 18px }
+.login .primary:disabled { opacity: .6; cursor: default }
 
 /* ============================= Toast ============================= */
 
