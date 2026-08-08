@@ -15,7 +15,14 @@ const expenseGroups: [string, string[]][] = [
 
 const slug = (value: string) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+// Los seeds nacen con un updatedAt deliberadamente antiquísimo. Todos los dispositivos generan los
+// mismos ids (los slugs son estables), así que un móvil recién estrenado sembraría su árbol por
+// defecto y lo subiría; con esta fecha el trigger LWW del servidor lo descarta y nunca puede pisar
+// una categoría que ya hayas renombrado. Se usa también para rellenar las categorías que ya existían
+// en IndexedDB antes de la v3 (ver el backfill de db.ts).
+export const EPOCH_UPDATED_AT = '1970-01-01T00:00:00.000Z';
+
 export const defaultCategories: Category[] = [
-  { id: 'income', name: 'Ingresos', type: 'income', order: 0, archived: false, subcategories: ['Nómina', 'Otros ingresos'].map((name, order) => ({ id: `income-${slug(name)}`, name, order, archived: false })) },
-  ...expenseGroups.map(([name, children], order) => ({ id: `expense-${slug(name)}`, name, type: 'expense' as const, order, archived: false, subcategories: children.map((child, subOrder) => ({ id: `expense-${slug(name)}-${slug(child)}`, name: child, order: subOrder, archived: false })) })),
+  { id: 'income', name: 'Ingresos', type: 'income', order: 0, archived: false, updatedAt: EPOCH_UPDATED_AT, subcategories: ['Nómina', 'Otros ingresos'].map((name, order) => ({ id: `income-${slug(name)}`, name, order, archived: false, updatedAt: EPOCH_UPDATED_AT })) },
+  ...expenseGroups.map(([name, children], order) => ({ id: `expense-${slug(name)}`, name, type: 'expense' as const, order, archived: false, updatedAt: EPOCH_UPDATED_AT, subcategories: children.map((child, subOrder) => ({ id: `expense-${slug(name)}-${slug(child)}`, name: child, order: subOrder, archived: false, updatedAt: EPOCH_UPDATED_AT })) })),
 ];
