@@ -1,5 +1,832 @@
-:root{font-family:'Avenir Next','Trebuchet MS',sans-serif;color:#edf6ff;background:#07111e;font-synthesis:none;--bg:#07111e;--panel:#0d1929;--panel2:#111f32;--line:#203550;--muted:#8295ac;--blue:#55c2ff;--blue2:#238bd8;--green:#47d7ac;--red:#ff7a90;--shadow:0 24px 70px #02071166}*{box-sizing:border-box}body{margin:0;min-width:320px;min-height:100vh;background:radial-gradient(circle at 80% -10%,#12355b 0,transparent 36%),radial-gradient(circle at 5% 90%,#0c2b3c 0,transparent 32%),var(--bg)}button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #55c2ff66;outline-offset:2px}.app-shell{min-height:100vh}.app-shell>aside{position:fixed;inset:0 auto 0 0;width:244px;padding:30px 22px;border-right:1px solid #192c43;background:#081321dd;backdrop-filter:blur(18px);display:flex;flex-direction:column;z-index:5}.brand{display:flex;gap:12px;align-items:center;margin-bottom:55px}.brand>span{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;color:#06111e;background:linear-gradient(140deg,#86dcff,var(--blue));box-shadow:0 10px 35px #55c2ff40}.brand svg{width:23px}.brand div{display:flex;flex-direction:column}.brand b,h1,h2,.stat strong{font-family:'Avenir Next','Trebuchet MS',sans-serif}.brand b{font-size:19px;letter-spacing:.02em}.brand small{color:var(--muted);font-size:11px}.app-shell nav{display:grid;gap:8px}.app-shell nav button{border:0;background:transparent;color:#90a3b9;border-radius:12px;padding:13px 14px;display:flex;align-items:center;gap:12px;text-align:left;transition:.2s}.app-shell nav button:hover,.app-shell nav button.active{color:#fff;background:#14273d}.app-shell nav button.active{box-shadow:inset 3px 0 var(--blue)}nav svg{width:19px}.aside-note{margin-top:auto;border:1px solid #1f3852;border-radius:15px;padding:15px;background:linear-gradient(135deg,#102238,#0b1929)}.aside-note span{font-size:12px;color:var(--blue);text-transform:uppercase;letter-spacing:.12em}.aside-note p{font-size:12px;color:var(--muted);line-height:1.5;margin:7px 0 0}.app-shell>main{margin-left:244px;max-width:1600px;padding:38px clamp(24px,4vw,68px) 70px}.app-shell header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:32px}.eyebrow{color:var(--blue);font-size:11px;text-transform:uppercase;letter-spacing:.16em;font-weight:700}.app-shell h1{font-size:clamp(27px,3vw,40px);margin:5px 0 0;letter-spacing:-.045em}.primary,.secondary{border:0;border-radius:12px;padding:12px 17px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700}.primary{color:#06111d;background:linear-gradient(135deg,#75d3ff,#39aef0);box-shadow:0 10px 30px #3fbaff2a}.secondary{color:#dbeaff;border:1px solid var(--line);background:#111f32}.primary svg,.secondary svg{width:18px}.period-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.segmented{background:#0c1828;border:1px solid #1c3048;border-radius:11px;padding:4px;display:flex}.segmented button{border:0;border-radius:8px;padding:7px 16px;color:var(--muted);background:transparent}.segmented button.active{background:#1d3650;color:white}.period-nav{display:flex;align-items:center;gap:14px;text-transform:capitalize}.period-nav button{width:34px;height:34px;border:1px solid var(--line);border-radius:9px;color:#ddebfa;background:#0d1929;font-size:22px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.stat{position:relative;padding:20px;border:1px solid #1b3048;background:linear-gradient(145deg,#101e30,#0c1827);border-radius:17px;overflow:hidden;min-height:142px;box-shadow:0 14px 35px #0208122d}.stat:after{content:"";position:absolute;width:90px;height:90px;border-radius:50%;filter:blur(38px);right:-20px;top:-20px;background:currentColor;opacity:.18}.stat.green{color:var(--green)}.stat.red{color:var(--red)}.stat.blue{color:var(--blue)}.stat-icon{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:currentColor}.stat-icon svg{width:19px;color:#07121f}.stat>span{display:block;color:#8da0b8;font-size:13px;margin:14px 0 3px}.stat strong{font-size:clamp(20px,2vw,28px);color:#f6fbff;letter-spacing:-.04em}.charts{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin-top:14px}.chart{border:1px solid #1b3048;background:#0d1929dd;border-radius:17px;padding:22px 18px 12px;min-width:0}.chart.wide{grid-column:1/-1}.chart h2{font-size:16px;margin:0}.chart p{color:var(--muted);font-size:12px;margin:4px 0 18px}.chart-loading,.loading{min-height:300px;display:grid;place-items:center;color:var(--muted)}.loading{min-height:100vh}.empty{margin-top:18px;min-height:350px;border:1px dashed #28405c;border-radius:18px;display:grid;place-items:center;align-content:center;text-align:center;padding:30px;background:#0b172633}.empty>span{width:56px;height:56px;border-radius:17px;background:#132a41;color:var(--blue);display:grid;place-items:center}.empty h2{margin:16px 0 4px;font-size:18px}.empty p{margin:0;max-width:430px;color:var(--muted);line-height:1.5}.filters{display:flex;gap:12px;margin-bottom:16px}.search{position:relative;flex:1}.search svg{position:absolute;left:14px;top:13px;width:18px;color:var(--muted)}input,select,textarea{width:100%;border:1px solid #263b55;border-radius:11px;background:#0c1828;color:#edf6ff;padding:12px 13px}.search input{padding-left:42px}.filters select{width:190px}.table-wrap{border:1px solid #1d3149;border-radius:16px;overflow:auto;background:#0d1929}table{width:100%;border-collapse:collapse;min-width:800px}th{color:#7f94ac;text-transform:uppercase;letter-spacing:.09em;font-size:10px;text-align:left;padding:15px 18px;border-bottom:1px solid #253a52}td{padding:15px 18px;border-bottom:1px solid #182a40;color:#b9c9d9;font-size:13px}tbody tr:hover{background:#102238}td b{display:block;color:#edf6ff}td small{display:block;color:var(--muted);margin-top:3px}.tag{background:#172a40;border:1px solid #263d58;padding:5px 9px;border-radius:50px;font-size:11px}.amount{text-align:right;font-variant-numeric:tabular-nums}.amount.income{color:var(--green);font-weight:700}.amount.expense{color:var(--red);font-weight:700}.actions{white-space:nowrap;text-align:right}.actions button,.modal-head button,.category-actions button,.sub-list button{border:0;color:#849ab2;background:transparent;padding:5px}.actions svg,.modal-head svg,.category-actions svg,.sub-list svg{width:16px}.modal-backdrop{position:fixed;inset:0;background:#020711bf;z-index:20;display:grid;place-items:center;padding:20px;backdrop-filter:blur(8px)}.modal{width:min(620px,100%);max-height:94vh;overflow:auto;border:1px solid #29435f;border-radius:20px;background:#0d1929;box-shadow:var(--shadow);padding:26px}.modal-head{display:flex;justify-content:space-between}.modal h2{margin:4px 0 22px}.modal form>label,.form-grid label{display:grid;gap:7px;color:#aebfd1;font-size:12px;margin:14px 0}.modal label span{color:var(--muted)}textarea{min-height:80px;resize:vertical}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 13px}.type-picker{display:grid;grid-template-columns:1fr 1fr;background:#081423;padding:4px;border-radius:12px}.type-picker button{border:0;border-radius:9px;padding:10px;color:var(--muted);background:transparent;font-weight:700}.type-picker button.active.expense{color:#ffdfe5;background:#6b2838}.type-picker button.active.income{color:#d9fff2;background:#145141}.form-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}.form-error{color:#ff9caf;font-size:12px}.toast{position:fixed;right:28px;bottom:28px;background:#dff8ff;color:#071523;font-weight:700;padding:13px 18px;border-radius:12px;z-index:50;box-shadow:var(--shadow)}.sr-live,.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.category-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}.category-toolbar p{color:var(--muted)}.category-toolbar>div{display:flex;gap:10px}.category-columns{display:grid;grid-template-columns:1fr 1fr;gap:18px}.category-columns>div>h2{font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:#8ea4bb}.category-card{border:1px solid #203750;background:#0d1a2a;border-radius:14px;margin-bottom:10px;overflow:hidden}.archived{opacity:.5}.category-head{display:flex;align-items:center;padding:13px;gap:7px}.category-head strong{flex:1}.expand{border:0;background:transparent;color:var(--blue);padding:4px}.expand svg{width:17px}.category-actions{display:flex;align-items:center}.category-actions button:last-child,.sub-list div button:last-child{font-size:11px;border:1px solid #293f58;border-radius:7px;padding:5px 8px}.sub-list{padding:3px 15px 13px 46px}.sub-list>div{display:flex;align-items:center;border-top:1px solid #182c42;padding:9px 0;color:#aebed0;font-size:13px}.sub-list span{flex:1}.sub-list small{color:var(--muted);margin-right:10px}.add-sub{display:flex;gap:7px;align-items:center;color:var(--blue)!important;margin-top:7px}.danger-zone{margin-top:30px;border:1px solid #5b2935;border-radius:16px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;background:#29131a55}.danger-zone h2{font-size:15px;margin:0}.danger-zone p{color:#a99198;font-size:12px;margin:5px 0 0}.danger-zone button{border:1px solid #8b3e50;border-radius:10px;background:#521f2c;color:#ffdbe2;padding:10px 14px;display:flex;gap:8px}.danger-zone svg{width:17px}.mobile-nav{display:none}
-@media(max-width:1050px){.stats{grid-template-columns:1fr 1fr}.charts{grid-template-columns:1fr}.category-columns{grid-template-columns:1fr}}
-@media(max-width:760px){.app-shell>aside{display:none}.app-shell>main{margin:0;padding:24px 16px 100px}.app-shell header{align-items:center}.app-shell header .primary{width:46px;height:46px;padding:0;font-size:0}.app-shell header .primary svg{width:20px}.mobile-nav{position:fixed;display:flex;z-index:10;bottom:12px;left:12px;right:12px;background:#0c1929ed;border:1px solid #263b55;border-radius:17px;backdrop-filter:blur(18px);padding:7px;box-shadow:var(--shadow)}.mobile-nav button{flex:1;border:0;background:transparent;color:#71869e;padding:6px;display:grid;place-items:center;gap:2px}.mobile-nav button.active{color:var(--blue)}.mobile-nav svg{width:20px}.mobile-nav small{font-size:10px}.period-bar,.category-toolbar{align-items:flex-start;gap:12px;flex-direction:column}.period-nav{align-self:stretch;justify-content:space-between}.category-toolbar>div{width:100%;flex-direction:column}.stats{grid-template-columns:1fr 1fr;gap:9px}.stat{min-height:128px;padding:15px}.charts{grid-template-columns:1fr}.filters{flex-direction:column}.filters select{width:100%}.form-grid{grid-template-columns:1fr}.modal{padding:20px 16px}.category-actions button:nth-child(-n+2){display:none}.category-head{flex-wrap:wrap}.category-actions{width:100%;padding-left:27px}.danger-zone{align-items:flex-start;gap:16px;flex-direction:column}.toast{left:16px;right:16px;bottom:92px;text-align:center}}
-@media(max-width:430px){.stats{grid-template-columns:1fr}.stat{min-height:112px}.form-actions{flex-direction:column-reverse}.form-actions button{width:100%}}
-@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+/* ============================================================
+   Cielo · Finanzas Personales — sistema de diseño
+   Tema claro minimalista: blancos, negros y grises.
+   Verde/rojo se reservan EXCLUSIVAMENTE para ingreso/gasto.
+   Mantener los valores en sync con src/theme.ts (recharts).
+   ============================================================ */
+
+:root {
+  /* --- Neutrales --- */
+  --bg: #fafafa;            /* fondo de página */
+  --surface: #ffffff;       /* cards, sidebar, modal, tabla */
+  --surface-2: #f5f5f5;     /* pistas de segmented/type-picker, tags */
+  --line: #e5e5e5;          /* bordes y divisores decorativos */
+  --line-strong: #d4d4d4;   /* bordes decorativos que necesitan verse (dashed) */
+  --line-control: #8d8d8d;  /* bordes de inputs y controles (≥3:1, WCAG 1.4.11) */
+  --text: #0a0a0a;          /* titulares e importes */
+  --text-2: #404040;        /* texto de tabla */
+  --muted: #737373;         /* labels y texto secundario (4.7:1 sobre blanco) */
+  --accent: #0a0a0a;        /* botón primario, nav activo, foco */
+  --accent-fg: #ffffff;
+
+  /* --- Semánticos --- */
+  --income: #16794f;        /* 5.4:1 sobre blanco */
+  --expense: #b3261e;       /* 6.5:1 sobre blanco */
+  --danger-bg: #fef6f5;
+  --danger-line: #f3d4d1;
+
+  /* --- Efectos --- */
+  --backdrop: #0a0a0a59;
+  --shadow: 0 1px 2px #0000000a, 0 8px 24px #0000000f;
+  --shadow-pill: 0 1px 2px #00000014;
+
+  font-family: 'Avenir Next', 'Trebuchet MS', sans-serif;
+  font-synthesis: none;
+  color-scheme: light;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box }
+
+/* Evita que iOS infle el texto al girar a landscape. */
+html { -webkit-text-size-adjust: 100% }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100dvh; /* `dvh` sigue la barra de direcciones de iOS; `vh` no y corta contenido. */
+  background: var(--bg);
+}
+
+button, input, select, textarea { font: inherit }
+button { cursor: pointer }
+
+/* Único indicador de foco de toda la app: no eliminar. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ============================ Layout ============================ */
+
+.app-shell { min-height: 100vh; min-height: 100dvh }
+
+.app-shell > aside {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 244px;
+  padding: 30px 22px;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  z-index: 5;
+}
+
+.app-shell > main {
+  margin-left: 244px;
+  max-width: 1600px;
+  padding: 38px clamp(24px, 4vw, 68px) 70px;
+}
+
+.app-shell header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.app-shell h1 {
+  font-size: clamp(27px, 3vw, 40px);
+  margin: 5px 0 0;
+  letter-spacing: -.045em;
+}
+
+.eyebrow {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .16em;
+  font-weight: 700;
+}
+
+/* ============================ Sidebar ============================ */
+
+.brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 55px;
+}
+.brand > span {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--accent-fg);
+  background: var(--accent);
+}
+.brand svg { width: 23px }
+.brand div { display: flex; flex-direction: column }
+.brand b, h1, h2, .stat strong { font-family: 'Avenir Next', 'Trebuchet MS', sans-serif }
+.brand b { font-size: 19px; letter-spacing: .02em }
+.brand small { color: var(--muted); font-size: 11px }
+
+.app-shell nav { display: grid; gap: 8px }
+.app-shell nav button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 12px;
+  padding: 13px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  transition: .2s;
+}
+.app-shell nav button:hover,
+.app-shell nav button.active {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.app-shell nav button.active { box-shadow: inset 3px 0 var(--accent) }
+nav svg { width: 19px }
+
+.aside-note {
+  margin-top: auto;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 15px;
+  background: var(--bg);
+}
+.aside-note span {
+  font-size: 12px;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+.aside-note p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 7px 0 0;
+}
+
+/* ============================ Botones ============================ */
+
+.primary, .secondary {
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+}
+.primary {
+  color: var(--accent-fg);
+  background: var(--accent);
+  box-shadow: var(--shadow-pill);
+}
+.secondary {
+  color: var(--text);
+  border: 1px solid var(--line-control);
+  background: var(--surface);
+}
+.primary svg, .secondary svg { width: 18px }
+
+/* ======================= Barra de periodo ======================= */
+
+.period-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.segmented {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 4px;
+  display: flex;
+}
+.segmented button {
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 16px;
+  color: var(--muted);
+  background: transparent;
+}
+.segmented button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-pill);
+}
+
+.period-nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-transform: capitalize;
+}
+.period-nav button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-control);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 22px;
+}
+
+/* ============================== KPIs ============================== */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.stat {
+  position: relative;
+  padding: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 17px;
+  overflow: hidden;
+  min-height: 142px;
+}
+/* El `color` de la card recolorea el chip del icono vía currentColor. */
+.stat.green { color: var(--income) }
+.stat.red { color: var(--expense) }
+.stat.neutral { color: var(--text) }
+.stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: currentColor;
+}
+.stat-icon svg { width: 19px; color: var(--accent-fg) }
+.stat > span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  margin: 14px 0 3px;
+}
+.stat strong {
+  font-size: clamp(20px, 2vw, 28px);
+  color: var(--text);
+  letter-spacing: -.04em;
+}
+
+/* ============================ Gráficas ============================ */
+
+.charts {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+.chart {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 17px;
+  padding: 22px 18px 12px;
+  min-width: 0;
+}
+.chart.wide { grid-column: 1 / -1 }
+.chart h2 { font-size: 16px; margin: 0 }
+.chart p { color: var(--muted); font-size: 12px; margin: 4px 0 18px }
+/* Altura de los gráficos. Vive aquí y no en la prop `height` de ResponsiveContainer para poder
+   bajarla en móvil y landscape sin duplicar breakpoints en Charts.tsx. */
+.chart-box { height: 280px }
+
+.chart-loading, .loading {
+  min-height: 300px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.loading { min-height: 100vh; min-height: 100dvh }
+
+/* ========================= Estado vacío ========================= */
+
+.empty {
+  margin-top: 18px;
+  min-height: 350px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  text-align: center;
+  padding: 30px;
+  background: var(--surface);
+}
+.empty > span {
+  width: 56px;
+  height: 56px;
+  border-radius: 17px;
+  background: var(--surface-2);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+}
+.empty h2 { margin: 16px 0 4px; font-size: 18px }
+.empty p { margin: 0; max-width: 430px; color: var(--muted); line-height: 1.5 }
+
+/* ====================== Filtros y formularios ====================== */
+
+.filters { display: flex; gap: 12px; margin-bottom: 16px }
+.search { position: relative; flex: 1 }
+.search svg {
+  position: absolute;
+  left: 14px;
+  top: 13px;
+  width: 18px;
+  color: var(--muted);
+}
+
+input, select, textarea {
+  width: 100%;
+  border: 1px solid var(--line-control);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 12px 13px;
+  /* Explícito y no heredado: por debajo de 16px iOS hace zoom al enfocar el campo y ya no
+     vuelve solo. Si algún día se pone `font-size` en :root, esto sigue protegiendo el formulario. */
+  font-size: 16px;
+}
+::placeholder { color: var(--muted) }
+.search input { padding-left: 42px }
+.filters select { width: 190px }
+textarea { min-height: 80px; resize: vertical }
+
+/* ============================= Tabla ============================= */
+
+.table-wrap {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: auto;
+  background: var(--surface);
+}
+table { width: 100%; border-collapse: collapse; min-width: 800px }
+th {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  font-size: 10px;
+  text-align: left;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--line);
+}
+td {
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: 13px;
+}
+/* Los hover van tras `hover: hover`: en táctil se quedan pegados tras el tap. */
+@media (hover: hover) {
+  tbody tr:hover { background: var(--bg) }
+}
+td b { display: block; color: var(--text) }
+td small { display: block; color: var(--muted); margin-top: 3px }
+
+.tag {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  padding: 5px 9px;
+  border-radius: 50px;
+  font-size: 11px;
+}
+
+.amount { text-align: right; font-variant-numeric: tabular-nums }
+.amount.income { color: var(--income); font-weight: 700 }
+.amount.expense { color: var(--expense); font-weight: 700 }
+
+.actions { white-space: nowrap; text-align: right }
+.actions button,
+.modal-head button,
+.category-actions button,
+.sub-list button {
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  padding: 5px;
+}
+@media (hover: hover) {
+  .actions button:hover,
+  .modal-head button:hover,
+  .category-actions button:hover,
+  .sub-list button:hover { color: var(--text) }
+}
+.actions svg, .modal-head svg, .category-actions svg, .sub-list svg { width: 16px }
+
+/* ========================= Tabla semanal ========================= */
+
+.weekly-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.weekly-toolbar p { margin: 0; color: var(--muted); font-size: 13px }
+.weekly-toolbar b { color: var(--income) }
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.switch input { width: 16px; height: 16px; accent-color: var(--accent) }
+
+/* El alto máximo es lo que hace útil la cabecera sticky: sin él la tabla nunca desborda en vertical. */
+.weekly-table { max-height: 72vh; max-height: 72dvh }
+.weekly-table table { min-width: 920px }
+.weekly-table th, .weekly-table td { padding: 11px 16px; white-space: nowrap }
+.weekly-table thead th { position: sticky; top: 0; z-index: 2; background: var(--surface) }
+
+/* Primera columna fija: en una tabla cruzada, perder la etiqueta de la fila al hacer scroll
+   horizontal deja los números sin significado. Las celdas sticky necesitan fondo propio. */
+.weekly-table tbody th, .weekly-table tfoot th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
+}
+.weekly-table thead th:first-child { left: 0; z-index: 3 }
+.weekly-table tbody tr:not(.group-row) th { padding-left: 34px; color: var(--text-2); font-weight: 400 }
+
+.weekly-table .group-row th, .weekly-table .group-row td { background: var(--surface-2); font-weight: 600; color: var(--text) }
+.weekly-table .group-row th { text-transform: uppercase; letter-spacing: .06em; font-size: 11px }
+
+.weekly-table tfoot th, .weekly-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  font-weight: 700;
+  color: var(--text);
+  border-top: 2px solid var(--line-strong);
+  border-bottom: 0;
+}
+.weekly-table tfoot th { z-index: 3 }
+
+/* Deben ir tras las reglas de .group-row y tfoot para ganarles el fondo. El hover se aplica a las
+   celdas, no al <tr>: las sticky tienen fondo propio y se comerían el del tr. */
+.weekly-table tbody tr:hover th, .weekly-table tbody tr:hover td { background: var(--bg) }
+.weekly-table .group-row:hover th, .weekly-table .group-row:hover td { background: var(--line) }
+
+.weekly-table .total { color: var(--text); font-weight: 600 }
+.weekly-table .zero { color: var(--muted) }
+/* Archivada en gris, no con opacity: una celda sticky semitransparente deja ver lo que pasa por debajo. */
+.weekly-table .archived th, .weekly-table .archived td { color: var(--muted); font-weight: 400 }
+
+/* ============================= Modal ============================= */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--backdrop);
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  backdrop-filter: blur(8px);
+  overscroll-behavior: contain;
+}
+.modal {
+  width: min(620px, 100%);
+  max-height: 94vh;
+  max-height: 94dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 26px;
+}
+.modal-head { display: flex; justify-content: space-between }
+.modal h2 { margin: 4px 0 22px }
+.modal form > label, .form-grid label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 14px 0;
+}
+.modal label span { color: var(--muted) }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 13px }
+
+.type-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--surface-2);
+  padding: 4px;
+  border-radius: 12px;
+}
+.type-picker button {
+  border: 0;
+  border-radius: 9px;
+  padding: 10px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 700;
+}
+.type-picker button.active.expense {
+  color: var(--expense);
+  background: var(--surface);
+  box-shadow: var(--shadow-pill);
+}
+.type-picker button.active.income {
+  color: var(--income);
+  background: var(--surface);
+  box-shadow: var(--shadow-pill);
+}
+
+.form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px }
+.form-error { color: var(--expense); font-size: 12px }
+
+/* ============================= Toast ============================= */
+
+.toast {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 700;
+  padding: 13px 18px;
+  border-radius: 12px;
+  z-index: 50;
+  box-shadow: var(--shadow);
+}
+.sr-live, .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+/* =========================== Categorías =========================== */
+
+.category-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.category-toolbar p { color: var(--muted) }
+.category-toolbar > div { display: flex; gap: 10px }
+
+.category-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px }
+.category-columns > div > h2 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--muted);
+}
+
+.category-card {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 14px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.archived { opacity: .5 }
+.category-head { display: flex; align-items: center; padding: 13px; gap: 7px }
+.category-head strong { flex: 1 }
+.expand { border: 0; background: transparent; color: var(--muted); padding: 4px }
+.expand svg { width: 17px }
+.category-actions { display: flex; align-items: center }
+.category-actions button:last-child,
+.sub-list div button:last-child {
+  font-size: 11px;
+  border: 1px solid var(--line-control);
+  border-radius: 7px;
+  padding: 5px 8px;
+}
+
+.sub-list { padding: 3px 15px 13px 46px }
+.sub-list > div {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding: 9px 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.sub-list span { flex: 1 }
+.sub-list small { color: var(--muted); margin-right: 10px }
+.add-sub { display: flex; gap: 7px; align-items: center; color: var(--text) !important; margin-top: 7px }
+
+/* ========================== Zona peligrosa ========================== */
+
+.danger-zone {
+  margin-top: 30px;
+  border: 1px solid var(--danger-line);
+  border-radius: 16px;
+  padding: 18px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--danger-bg);
+}
+.danger-zone h2 { font-size: 15px; margin: 0; color: var(--text) }
+.danger-zone p { color: var(--muted); font-size: 12px; margin: 5px 0 0 }
+.danger-zone button {
+  border: 0;
+  border-radius: 10px;
+  background: var(--expense);
+  color: var(--accent-fg);
+  font-weight: 700;
+  padding: 10px 14px;
+  display: flex;
+  gap: 8px;
+}
+.danger-zone svg { width: 17px }
+
+.mobile-nav { display: none }
+
+/* ========================== Responsive ========================== */
+
+@media (max-width: 1050px) {
+  .stats { grid-template-columns: 1fr 1fr }
+  .charts { grid-template-columns: 1fr }
+  .category-columns { grid-template-columns: 1fr }
+}
+
+@media (max-width: 760px) {
+  .app-shell > aside { display: none }
+  .app-shell > main { margin: 0; padding: 24px 16px calc(100px + env(safe-area-inset-bottom)) }
+  .app-shell header { align-items: center }
+  .app-shell header .primary { width: 46px; height: 46px; padding: 0; font-size: 0; gap: 0 }
+  .app-shell header .primary svg { width: 20px }
+
+  .mobile-nav {
+    position: fixed;
+    display: flex;
+    z-index: 10;
+    /* Safe areas: sin ellas la barra queda bajo el indicador de home del iPhone, y en
+       horizontal, debajo del notch. */
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    left: calc(12px + env(safe-area-inset-left));
+    right: calc(12px + env(safe-area-inset-right));
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 17px;
+    padding: 7px;
+    box-shadow: var(--shadow);
+  }
+  .mobile-nav button {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 6px;
+    display: grid;
+    place-items: center;
+    gap: 2px;
+  }
+  .mobile-nav button.active { color: var(--text) }
+  .mobile-nav svg { width: 20px }
+  .mobile-nav small { font-size: 10px }
+
+  .period-bar, .category-toolbar, .weekly-toolbar { align-items: flex-start; gap: 12px; flex-direction: column }
+  .period-nav { align-self: stretch; justify-content: space-between }
+  /* En la vista Semanal, PeriodBar pinta un <span/> vacío para conservar el space-between.
+     En columna ese hueco se ve, así que se retira. */
+  .period-bar > span:empty { display: none }
+  /* La tabla cruzada no se reflowea: partirla en tarjetas destruye el cruce categoría × semana.
+     Scroll horizontal con la primera columna fija, que es justo para lo que está el sticky. */
+  .weekly-table { max-height: none }
+  .weekly-table table { min-width: 820px }
+  .weekly-table th, .weekly-table td { padding: 10px 12px; font-size: 12px }
+  .weekly-table tbody tr:not(.group-row) th { padding-left: 26px }
+  /* Sombra al borde de la columna fija: es la pista de que queda tabla a la derecha. */
+  .weekly-table tbody th[scope="row"], .weekly-table tfoot th[scope="row"] { box-shadow: 6px 0 6px -6px #0000001f }
+
+  /* Movimientos en tarjetas. La tabla es la rejilla: se recolocan las celdas por posición
+     (fecha | categoría | tipo | concepto | importe | acciones) sin tocar el JSX. */
+  .table-wrap:not(.weekly-table) { border: 0; background: transparent; overflow: visible }
+  .table-wrap:not(.weekly-table) table { min-width: 0; display: block }
+  .table-wrap:not(.weekly-table) thead { display: none }
+  .table-wrap:not(.weekly-table) tbody { display: grid; gap: 9px }
+  .table-wrap:not(.weekly-table) tbody tr {
+    position: relative; /* ancla la celda "Tipo", que se oculta con position:absolute */
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "concept amount" "date amount" "tag actions";
+    align-items: center;
+    gap: 2px 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 14px;
+  }
+  .table-wrap:not(.weekly-table) td { border: 0; padding: 0 }
+  .table-wrap:not(.weekly-table) td:nth-child(1) { grid-area: date; font-size: 12px; color: var(--muted) }
+  .table-wrap:not(.weekly-table) td:nth-child(2) { grid-area: tag; margin-top: 9px }
+  /* "Tipo" es redundante en pantalla (el signo y el color del importe ya lo dicen) pero se
+     oculta como .sr-only, no con display:none, para no sacarla del árbol de accesibilidad. */
+  .table-wrap:not(.weekly-table) td:nth-child(3) {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .table-wrap:not(.weekly-table) td:nth-child(4) { grid-area: concept }
+  .table-wrap:not(.weekly-table) td:nth-child(5) { grid-area: amount; font-size: 16px; align-self: start }
+  .table-wrap:not(.weekly-table) td:nth-child(6) { grid-area: actions; margin-top: 9px }
+
+  /* El modal sube desde abajo y las acciones quedan fijas al pie: con el teclado abierto,
+     un diálogo centrado dejaba Guardar/Cancelar fuera de la pantalla. */
+  .modal-backdrop { place-items: end stretch; padding: 0 }
+  .modal {
+    width: 100%;
+    max-height: 92dvh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: 0;
+    padding: 20px 16px 0;
+  }
+  /* El área segura va en el padding del pie, no en el del modal: el sticky se ancla al borde
+     del padding-box, así que con el hueco abajo del modal quedaría por debajo del indicador. */
+  .form-actions {
+    position: sticky;
+    bottom: 0;
+    margin-top: 16px;
+    padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+
+  .category-toolbar > div { width: 100%; flex-direction: column }
+  .stats { grid-template-columns: 1fr 1fr; gap: 9px }
+  .stat { min-height: 128px; padding: 15px }
+  .charts { grid-template-columns: 1fr }
+  .chart-box { height: 210px }
+  .filters { flex-direction: column }
+  .filters select { width: 100% }
+  .form-grid { grid-template-columns: 1fr }
+  .category-head { flex-wrap: wrap }
+  .category-actions { width: 100%; padding-left: 27px }
+  .danger-zone { align-items: flex-start; gap: 16px; flex-direction: column }
+  .toast { left: 16px; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); text-align: center }
+}
+
+@media (max-width: 430px) {
+  /* Los KPIs se quedan en 2×2: a una columna son ~450px de scroll antes del primer gráfico. */
+  .stat { min-height: 104px; padding: 13px }
+  .stat strong { font-size: 19px }
+  .form-actions { flex-direction: column-reverse }
+  .form-actions button { width: 100% }
+}
+
+/* Móvil en horizontal: sobra ancho y falta alto, así que se recorta lo vertical. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .app-shell > main { padding-top: 16px }
+  .app-shell header { margin-bottom: 18px }
+  .stat { min-height: 0 }
+  .chart-box { height: 190px }
+  .modal { max-height: 96dvh; padding-top: 14px }
+  .modal h2 { margin: 4px 0 12px }
+}
+
+/* Áreas táctiles ≥44px (WCAG 2.5.5 / HIG). Va por `pointer: coarse` y no por ancho: apunta al
+   dispositivo táctil real, incluidas tablets, y no engorda la interfaz con ratón. */
+@media (pointer: coarse) {
+  .period-nav button { width: 44px; height: 44px }
+  .segmented button { min-height: 44px }
+  .actions button,
+  .modal-head button,
+  .category-actions button,
+  .sub-list button,
+  .expand {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-grid;
+    place-items: center;
+  }
+  /* Los de texto ("Archivar"/"Activar") solo necesitan alto; el ancho lo da el contenido. */
+  .category-actions button, .sub-list button { min-width: 0; padding: 5px 10px }
+  .category-actions button[aria-label], .sub-list button[aria-label] { min-width: 44px; padding: 5px }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important }
+}
