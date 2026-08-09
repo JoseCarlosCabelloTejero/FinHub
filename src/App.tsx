@@ -47,7 +47,7 @@ function Finances() {
   const deleteOne=async(m:Movement)=>{if(confirm(`¿Eliminar “${m.concept}”? Esta acción no se puede deshacer.`)){await removeMovement(m.id);await reload();flash('Movimiento eliminado')}};
   if(loading)return <div className="loading">Preparando tu espacio financiero…</div>;
   return <div className="app-shell">
-    <aside><div className="brand"><span><WalletCards/></span><div><b>Cielo</b><small>Finanzas personales</small></div></div><nav>{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><div className="aside-note"><span>Datos privados</span><p>Todo permanece en este navegador.</p><button className="sign-out" onClick={()=>signOut()}><LogOut/>Cerrar sesión</button></div></aside>
+    <aside><div className="brand"><span><WalletCards/></span><div><b>FinHub</b><small>Finanzas personales</small></div></div><nav>{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><div className="aside-note"><span>Datos privados</span><p>Todo permanece en este navegador.</p><button className="sign-out" onClick={()=>signOut()}><LogOut/>Cerrar sesión</button></div></aside>
     <main><header><div><span className="eyebrow">Tu dinero, con claridad</span><h1>{pages.find(p=>p[0]===page)![3]}</h1></div>{page!=='categories'&&<button className="primary" onClick={()=>openForm()}><Plus/>Nuevo movimiento</button>}</header>
     {page==='summary'&&<Summary prefs={prefs} setPrefs={setPrefs} totals={totals} items={inPeriod} categories={categories}/>}
     {page==='weekly'&&<Weekly prefs={prefs} setPrefs={setPrefs} movements={movements} categories={categories}/>}

@@ -20,7 +20,7 @@ export default function Login() {
   // camino hacia el mismo estado.
   const submit=async(e:React.FormEvent)=>{e.preventDefault();if(!email.trim()||!password){setError('Escribe tu correo y tu contraseña.');return}setError('');setSending(true);const failure=await signIn(email.trim(),password);if(failure){setSending(false);setError(messages[failure])}};
   return <div className="login"><form onSubmit={submit}>
-    <div className="brand"><span><WalletCards/></span><div><b>Cielo</b><small>Finanzas personales</small></div></div>
+    <div className="brand"><span><WalletCards/></span><div><b>FinHub</b><small>Finanzas personales</small></div></div>
     <span className="eyebrow">Acceso</span><h1>Entra en tu espacio</h1>
     <label>Correo electrónico<input type="email" autoComplete="email" autoFocus value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@correo.com"/></label>
     <label>Contraseña<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••"/></label>
