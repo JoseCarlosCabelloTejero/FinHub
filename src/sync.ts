@@ -1,5 +1,7 @@
+import { clearAllData, clearOutbox, deleteOutboxOp, enqueueOutbox, getCategory, getSyncMeta, readOutbox, removeMovement, replaceLocalData, saveCategory, saveMovement, saveSyncMeta } from './db';
 import { EPOCH_UPDATED_AT } from './data';
-import type { Category, Movement, MovementType, OutboxOp, Subcategory } from './types';
+import { resolveUserId, supabase } from './supabase';
+import type { Category, Movement, MovementType, OutboxOp, Subcategory, SyncState } from './types';
 
 // -----------------------------------------------------------------------------
 // Filas del servidor
@@ -161,4 +163,264 @@ export function applyPullToLocal(snapshot: Snapshot, pending: OutboxOp[]): Snaps
     categories.set(parent.id, { ...parent, subcategories: [...parent.subcategories.filter((candidate) => candidate.id !== sub.id), sub].sort((a, b) => a.order - b.order) });
   }
   return { movements: [...movements.values()], categories: [...categories.values()] };
+}
+
+// -----------------------------------------------------------------------------
+// Estado observable
+// -----------------------------------------------------------------------------
+
+const listeners = new Set<(state: SyncState) => void>();
+let state: SyncState = { status: 'idle', pendingOps: 0, lastSyncAt: null, lastError: null };
+const setState = (patch: Partial<SyncState>) => { state = { ...state, ...patch }; for (const listener of listeners) listener(state); };
+
+export const getSyncState = () => state;
+/** Se suscribe al estado del sync. Invoca el callback de inmediato con el estado actual. */
+export function subscribeSyncState(callback: (state: SyncState) => void) {
+  listeners.add(callback); callback(state);
+  return () => { listeners.delete(callback); };
+}
+
+// -----------------------------------------------------------------------------
+// Sellado de escrituras
+// -----------------------------------------------------------------------------
+
+// El último sello emitido se cachea en memoria para no leer IndexedDB en cada escritura, y se
+// persiste porque el reloj puede atrasarse entre dos sesiones, no solo dentro de una.
+let lastStamp: string | null = null;
+let storedStamp: Promise<string | null> | null = null;
+
+async function nextStamp() {
+  if (!storedStamp) storedStamp = getSyncMeta().then((meta) => meta.lastStampAt);
+  if (lastStamp === null) lastStamp = await storedStamp;
+  // La asignación va sin await de por medio: dos escrituras seguidas no pueden mirar el mismo valor
+  // y acabar con el mismo sello, que el LWW del servidor descartaría como empate.
+  const stamp = monotonicStamp(Date.now(), lastStamp);
+  lastStamp = stamp;
+  await saveSyncMeta({ lastStampAt: stamp });
+  return stamp;
+}
+
+// -----------------------------------------------------------------------------
+// Escrituras: IndexedDB primero, servidor después
+// -----------------------------------------------------------------------------
+
+// Mismo contrato que las de db.ts para que App.tsx siga siendo "escribir y recargar". La red no
+// aparece por ninguna parte: lo que se encola aquí se sube cuando se pueda, y mientras tanto la app
+// funciona igual sin conexión.
+async function enqueue(ops: OutboxOp[]) {
+  if (ops.length) await enqueueOutbox(ops);
+  setState({ pendingOps: (await readOutbox()).length });
+  scheduleSync();
+}
+
+export async function saveMovementSynced(movement: Movement) {
+  // Se re-sella aquí aunque MovementModal ya ponga un updatedAt: así solo hay un sitio que decide
+  // los sellos y todos son monótonos.
+  const stamped = { ...movement, updatedAt: await nextStamp() };
+  await saveMovement(stamped);
+  await enqueue([{ table: 'movements', kind: 'upsert', id: stamped.id, payload: toMovementRow(stamped), updatedAt: stamped.updatedAt }]);
+}
+
+export async function removeMovementSynced(id: string) {
+  await removeMovement(id);
+  // El servidor deja una lápida al borrar y con ella descarta un upsert tardío de otro dispositivo,
+  // así que un borrado nunca resucita.
+  await enqueue([{ table: 'movements', kind: 'delete', id, updatedAt: await nextStamp() }]);
+}
+
+export async function saveCategorySynced(category: Category) {
+  const { doc, ops } = diffCategoryDoc(await getCategory(category.id), category, await nextStamp());
+  await saveCategory(doc);
+  await enqueue(ops);
+}
+
+/** Borrado total. A diferencia del resto, este exige conexión. */
+// Un borrado que se encolara podría cruzarse con un dispositivo que aún tiene cambios pendientes y
+// repoblaría lo que se acaba de vaciar. Hacerlo en el servidor primero incrementa el wipe_epoch, que
+// es lo que hace que los demás dispositivos tiren su cola en vez de resucitar los datos.
+export async function clearAllDataSynced() {
+  const userId = await resolveUserId();
+  const { data, error } = await supabase.rpc('wipe_all_data');
+  if (error) throw new Error('Necesitas conexión para borrar todo');
+  await clearAllData();
+  // clearAllData vacía también `meta`, y ahí vive el userId del que depende el arranque sin conexión.
+  // migratedAt vuelve a null a propósito: el borrado resiembra las categorías por defecto en local y
+  // el servidor se ha quedado sin ninguna, así que hay que volver a subirlas o el próximo movimiento
+  // no tendría categoría a la que apuntar.
+  await saveSyncMeta({ userId, dataUserId: userId, wipeEpoch: Number(data), migratedAt: null });
+  lastPullKey = null;
+  setState({ pendingOps: 0, lastError: null });
+}
+
+// -----------------------------------------------------------------------------
+// Push
+// -----------------------------------------------------------------------------
+
+type ServerError = { code?: string; message?: string } | null;
+
+// Solo las violaciones de integridad (clase 23) y de dato (clase 22) son definitivas: reintentarlas
+// daría siempre el mismo error y atascarían la cola para siempre. Todo lo demás —red, 5xx, 401 con
+// el token caducado, incluso un 42501— se reintenta, porque tirar una escritura del usuario por un
+// fallo pasajero es mucho peor que reintentar de más.
+const isPermanent = (code?: string) => !!code && (code.startsWith('22') || code.startsWith('23'));
+
+async function pushOp(op: OutboxOp): Promise<ServerError> {
+  if (op.kind === 'delete') return (await supabase.from(op.table).delete().eq('id', op.id)).error;
+  if (!op.payload) return null;
+  // Sin .select() encadenado: la respuesta viene vacía y una fila descartada por el LWW del servidor
+  // es indistinguible de una aplicada, que es justo lo que queremos. El push es ciego.
+  return (await supabase.from(op.table).upsert(op.payload)).error;
+}
+
+/** Sube la cola en orden. Devuelve false si hubo que abortar (entonces no toca hacer pull). */
+async function pushOutbox() {
+  for (const { seq, op } of await readOutbox()) {
+    const error = await pushOp(op);
+    if (error && !isPermanent(error.code)) { setState({ pendingOps: (await readOutbox()).length }); return false; }
+    if (error) {
+      console.error('Operación de sync descartada por irrecuperable:', op, error);
+      setState({ lastError: `Un cambio no se pudo sincronizar (${error.code}) y se ha descartado.` });
+    }
+    // Solo se saca de la cola tras la confirmación del servidor: si la app muere a mitad, la op sigue
+    // ahí y se reintenta. Todas son idempotentes (upsert por id, delete por id).
+    await deleteOutboxOp(seq);
+  }
+  setState({ pendingOps: 0 });
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Pull
+// -----------------------------------------------------------------------------
+
+// Huella del último snapshot recibido. Si el servidor devuelve exactamente lo mismo, no se reescribe
+// IndexedDB ni se llama a reload(): sin esto, el sondeo de cada minuto repintaría los gráficos y
+// remontaría la tabla sin que nada hubiera cambiado.
+let lastPullKey: string | null = null;
+
+async function fetchSnapshot() {
+  const [movements, categories, subcategories] = await Promise.all([
+    supabase.from('movements').select('*'),
+    supabase.from('categories').select('*'),
+    supabase.from('subcategories').select('*'),
+  ]);
+  const failed = [movements, categories, subcategories].find((result) => result.error);
+  if (failed) throw new Error(failed.error?.message ?? 'Error al descargar los datos');
+  const movementRows = (movements.data ?? []) as MovementRow[], catRows = (categories.data ?? []) as CategoryRow[], subRows = (subcategories.data ?? []) as SubcategoryRow[];
+  return { key: JSON.stringify([movementRows, catRows, subRows]), snapshot: { movements: movementRows.map(fromMovementRow), categories: assembleCategories(catRows, subRows) } as Snapshot, empty: catRows.length === 0 && movementRows.length === 0 };
+}
+
+async function pullAndApply() {
+  const { key, snapshot } = await fetchSnapshot();
+  if (key === lastPullKey) return;
+  await replaceLocalData((pending) => applyPullToLocal(snapshot, pending));
+  lastPullKey = key;
+  await onRemoteChange?.();
+}
+
+// -----------------------------------------------------------------------------
+// Ciclo de sincronización
+// -----------------------------------------------------------------------------
+
+const SYNC_LOCK = 'finhub-sync';
+const POLL_MS = 60_000;
+const DEBOUNCE_MS = 800;
+
+let inFlight: Promise<void> | null = null;
+let rerun = false;
+let onRemoteChange: (() => Promise<void>) | null = null;
+let debounce: number | undefined;
+
+const scheduleSync = () => { window.clearTimeout(debounce); debounce = window.setTimeout(() => { void syncNow(); }, DEBOUNCE_MS); };
+
+// Dos capas de exclusión mutua. La de módulo evita que los disparadores (arranque, online, volver a
+// la pestaña, sondeo, debounce) se pisen entre sí; el web lock evita lo mismo entre pestañas del
+// mismo navegador, que comparten IndexedDB pero no variables. jsdom no trae navigator.locks, de ahí
+// la comprobación en vez de darlo por hecho.
+function withLock(run: () => Promise<void>) {
+  const locks: LockManager | undefined = navigator.locks;
+  return locks ? locks.request(SYNC_LOCK, run) : run();
+}
+
+/** Sincroniza ahora. Las llamadas concurrentes se funden en una sola ejecución más un repaso. */
+export function syncNow(): Promise<void> {
+  if (inFlight) { rerun = true; return inFlight; }
+  inFlight = (async () => {
+    try { do { rerun = false; await withLock(runSync); } while (rerun); }
+    finally { inFlight = null; }
+  })();
+  return inFlight;
+}
+
+async function runSync() {
+  if (!navigator.onLine) { setState({ status: 'offline' }); return; }
+  const userId = await resolveUserId();
+  if (!userId) { setState({ status: 'auth-required' }); return; }
+  setState({ status: 'syncing' });
+  try {
+    const meta = await adoptUser(userId);
+    await adoptWipeEpoch(meta.wipeEpoch);
+    if (!(await pushOutbox())) { setState({ status: 'error' }); return; }
+    // Solo se hace pull con la cola vacía: aplicar el snapshot con escrituras sin subir dejaría la
+    // pantalla mostrando la versión vieja de algo que el usuario acaba de escribir.
+    if ((await readOutbox()).length) { setState({ status: 'idle' }); return; }
+    await pullAndApply();
+    const lastSyncAt = new Date().toISOString();
+    await saveSyncMeta({ lastSyncAt });
+    setState({ status: 'idle', lastSyncAt });
+  } catch (error) {
+    console.error('Sync fallido, se reintentará:', error);
+    setState({ status: navigator.onLine ? 'error' : 'offline' });
+  }
+}
+
+// Cambio de usuario en el mismo navegador: la caché es del anterior y no puede mezclarse. No sirve
+// mirar meta.userId, que resolveUserId() ya ha puesto al día con el usuario actual.
+async function adoptUser(userId: string) {
+  const meta = await getSyncMeta();
+  if (meta.dataUserId === userId) return meta;
+  if (meta.dataUserId) { await clearOutbox(); lastPullKey = null; }
+  await saveSyncMeta({ dataUserId: userId, ...(meta.dataUserId ? { migratedAt: null, wipeEpoch: 0, lastSyncAt: null } : {}) });
+  return getSyncMeta();
+}
+
+// Un "Borrar todo" hecho desde otro dispositivo sube el epoch. Este dispositivo puede llevar horas
+// sin conexión y con cambios encolados: subirlos repoblaría lo que se acaba de vaciar. El wipe purga
+// también las lápidas, así que el trigger anti-resurrección no cubre este caso; el epoch es la única
+// defensa, y por eso se comprueba ANTES de pushear.
+async function adoptWipeEpoch(localEpoch: number) {
+  const { data, error } = await supabase.rpc('current_wipe_epoch');
+  if (error) throw new Error(error.message);
+  const remoteEpoch = Number(data);
+  if (remoteEpoch === localEpoch) return;
+  await clearOutbox();
+  await saveSyncMeta({ wipeEpoch: remoteEpoch });
+  lastPullKey = null;
+  setState({ pendingOps: 0 });
+}
+
+/** Arranca el sync y registra sus disparadores. Devuelve la función de parada. */
+// Sin Realtime a propósito: el momento que importa es "abro el móvil y veo lo del portátil", y eso
+// lo cubre visibilitychange con latencia percibida cero. Un websocket añadiría reconexión y refresco
+// de token a cambio de unos segundos que esta app no necesita.
+export function initSync(onChange: () => Promise<void>) {
+  onRemoteChange = onChange;
+  const wake = () => { void syncNow(); };
+  const goOffline = () => setState({ status: 'offline' });
+  // El sondeo solo con la pestaña visible: en segundo plano gastaría batería para nada, porque al
+  // volver a ella el propio visibilitychange ya sincroniza.
+  const whenVisible = () => { if (document.visibilityState === 'visible') void syncNow(); };
+  window.addEventListener('online', wake);
+  window.addEventListener('offline', goOffline);
+  document.addEventListener('visibilitychange', whenVisible);
+  const poll = window.setInterval(whenVisible, POLL_MS);
+  void readOutbox().then((queued) => setState({ pendingOps: queued.length }));
+  void syncNow();
+  return () => {
+    window.removeEventListener('online', wake);
+    window.removeEventListener('offline', goOffline);
+    document.removeEventListener('visibilitychange', whenVisible);
+    window.clearInterval(poll); window.clearTimeout(debounce);
+    onRemoteChange = null;
+  };
 }

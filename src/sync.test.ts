@@ -1,6 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyPullToLocal, assembleCategories, diffCategoryDoc, fromMovementRow, monotonicStamp, repairDanglingRefs, toCategoryRow, toMovementRow, toSubRow } from './sync';
-import type { Category, Movement, Subcategory } from './types';
+import type { Category, Movement, OutboxOp, Subcategory } from './types';
+
+// supabase.ts lanza al importarse si faltan las variables de entorno, así que los tests no pueden
+// cargarlo de verdad (mismo motivo que en Login.test.tsx). vi.hoisted es necesario porque la fábrica
+// del mock se eleva por encima de las declaraciones del fichero.
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), upsert: vi.fn(), remove: vi.fn(), select: vi.fn(), resolveUserId: vi.fn() }));
+vi.mock('./supabase', () => ({
+  resolveUserId: mocks.resolveUserId,
+  supabase: {
+    rpc: (name: string) => mocks.rpc(name),
+    from: (table: string) => ({
+      upsert: (payload: unknown) => mocks.upsert(table, payload),
+      delete: () => ({ eq: (_column: string, id: string) => mocks.remove(table, id) }),
+      select: () => mocks.select(table),
+    }),
+  },
+}));
 
 const T0 = '2026-01-01T00:00:00.000Z';
 const STAMP = '2026-02-01T00:00:00.000Z';
@@ -130,4 +146,150 @@ describe('monotonicStamp', () => {
   it('avanza un milisegundo cuando el reloj se ha atrasado', () => expect(monotonicStamp(Date.parse('2026-01-01T00:00:00.000Z'), '2026-01-01T00:00:05.000Z')).toBe('2026-01-01T00:00:05.001Z'));
   it('usa el reloj cuando va por delante del último sello', () => expect(monotonicStamp(Date.parse(STAMP), T0)).toBe(STAMP));
   it('sin sello previo devuelve la hora actual', () => expect(monotonicStamp(Date.parse(STAMP), null)).toBe(STAMP));
+});
+
+// El motor guarda estado a nivel de módulo (cola en vuelo, huella del último pull, último sello), así
+// que cada test necesita un módulo recién importado y no basta con limpiar IndexedDB.
+describe('motor de sync', () => {
+  let sync: typeof import('./sync');
+  let db: typeof import('./db');
+  const netError = { code: '', message: 'Failed to fetch' };
+  const queue = (...ops: OutboxOp[]) => db.enqueueOutbox(ops);
+  const opFor = (id: string): OutboxOp => ({ table: 'movements', kind: 'upsert', id, payload: toMovementRow(mov(id)), updatedAt: STAMP });
+
+  beforeEach(async () => {
+    // Solo setTimeout: así el debounce de las escrituras nunca dispara un sync a destiempo, pero
+    // fake-indexeddb conserva el setImmediate con el que agenda los eventos de sus transacciones
+    // (fingirlo también deja colgada cualquier operación contra la base).
+    vi.resetModules(); vi.clearAllMocks(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    mocks.resolveUserId.mockResolvedValue('u1');
+    mocks.rpc.mockResolvedValue({ data: 0, error: null });
+    mocks.upsert.mockResolvedValue({ error: null });
+    mocks.remove.mockResolvedValue({ error: null });
+    mocks.select.mockResolvedValue({ data: [], error: null });
+    db = await import('./db');
+    await db.clearAllData();
+    sync = await import('./sync');
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('sube la cola en el orden en que se escribió', async () => {
+    await queue(opFor('a'), opFor('b'), opFor('c'));
+    await sync.syncNow();
+    expect(mocks.upsert.mock.calls.map((call) => (call[1] as { id: string }).id)).toEqual(['a', 'b', 'c']);
+    expect(await db.readOutbox()).toHaveLength(0);
+  });
+
+  it('un fallo de red deja lo que queda en la cola y no hace pull', async () => {
+    await queue(opFor('a'), opFor('b'), opFor('c'));
+    mocks.upsert.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({ error: netError });
+    await sync.syncNow();
+    expect((await db.readOutbox()).map((entry) => entry.op.id)).toEqual(['b', 'c']);
+    expect(mocks.select).not.toHaveBeenCalled();
+    expect(sync.getSyncState().status).toBe('error');
+  });
+
+  it('descarta la op que el servidor nunca aceptaría y sigue con el resto', async () => {
+    await queue(opFor('a'), opFor('b'));
+    mocks.upsert.mockResolvedValueOnce({ error: { code: '23503', message: 'FK' } });
+    await sync.syncNow();
+    expect(await db.readOutbox()).toHaveLength(0);
+    expect(mocks.upsert).toHaveBeenCalledTimes(2);
+    expect(sync.getSyncState().lastError).toContain('23503');
+  });
+
+  it('aplica en local lo que baja del servidor', async () => {
+    const category = cat('c1', { subcategories: [sub('s1')] });
+    mocks.select.mockImplementation((table: string) => Promise.resolve({ data: table === 'movements' ? [toMovementRow(mov('m1'))] : table === 'categories' ? [toCategoryRow(category)] : [toSubRow('c1', sub('s1'))], error: null }));
+    await sync.syncNow();
+    const data = await db.getAllData();
+    expect(data.movements.map((m) => m.id)).toEqual(['m1']);
+    expect(data.categories).toEqual([category]);
+  });
+
+  it('no reescribe nada si el servidor devuelve lo mismo que la vez anterior', async () => {
+    const reload = vi.fn(async () => {});
+    const stop = sync.initSync(reload);
+    await sync.syncNow();
+    await sync.syncNow();
+    expect(reload).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('funde las llamadas concurrentes en una ejecución y un repaso', async () => {
+    await Promise.all([sync.syncNow(), sync.syncNow(), sync.syncNow()]);
+    expect(mocks.rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it('usa el web lock cuando el navegador lo trae', async () => {
+    const request = vi.fn((_name: string, run: () => Promise<void>) => run());
+    Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+    await sync.syncNow();
+    expect(request).toHaveBeenCalledWith('finhub-sync', expect.any(Function));
+    Reflect.deleteProperty(navigator, 'locks');
+  });
+
+  it('un borrado total en otro dispositivo tira la cola en vez de repoblarlo', async () => {
+    await queue(opFor('a'));
+    mocks.rpc.mockResolvedValue({ data: 4, error: null });
+    await sync.syncNow();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(await db.readOutbox()).toHaveLength(0);
+    expect((await db.getSyncMeta()).wipeEpoch).toBe(4);
+  });
+
+  it('un usuario distinto no hereda la cola del anterior', async () => {
+    await db.saveSyncMeta({ dataUserId: 'otro' });
+    await queue(opFor('a'));
+    await sync.syncNow();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(await db.readOutbox()).toHaveLength(0);
+    expect(await db.getSyncMeta()).toMatchObject({ dataUserId: 'u1', migratedAt: null });
+  });
+
+  it('sin sesión no toca el servidor', async () => {
+    mocks.resolveUserId.mockResolvedValue(null);
+    await sync.syncNow();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(sync.getSyncState().status).toBe('auth-required');
+  });
+
+  describe('escrituras', () => {
+    it('guarda el movimiento y lo encola con el mismo sello', async () => {
+      await sync.saveMovementSynced(mov('m1', { updatedAt: 'sello viejo' }));
+      const [{ op }] = await db.readOutbox();
+      const stored = (await db.getAllData()).movements[0];
+      expect(op).toMatchObject({ table: 'movements', kind: 'upsert', id: 'm1' });
+      expect((op.payload as { updated_at: string }).updated_at).toBe(stored.updatedAt);
+      expect(stored.updatedAt).not.toBe('sello viejo');
+    });
+
+    it('el borrado se encola como delete', async () => {
+      await sync.saveMovementSynced(mov('m1'));
+      await sync.removeMovementSynced('m1');
+      expect((await db.readOutbox()).map((entry) => entry.op.kind)).toEqual(['upsert', 'delete']);
+      expect((await db.getAllData()).movements).toHaveLength(0);
+    });
+
+    it('renombrar una categoría solo encola su fila', async () => {
+      const category = cat('c1', { subcategories: [sub('s1'), sub('s2', { order: 1 })] });
+      await db.saveCategory(category);
+      await sync.saveCategorySynced({ ...category, name: 'Coche' });
+      expect((await db.readOutbox()).map((entry) => [entry.op.table, entry.op.id])).toEqual([['categories', 'c1']]);
+    });
+
+    it('el borrado total exige conexión y no destruye nada si el servidor falla', async () => {
+      await sync.saveMovementSynced(mov('m1'));
+      mocks.rpc.mockResolvedValue({ data: null, error: netError });
+      await expect(sync.clearAllDataSynced()).rejects.toThrow('Necesitas conexión');
+      expect((await db.getAllData()).movements).toHaveLength(1);
+    });
+
+    it('tras el borrado total se adopta el epoch nuevo y se conserva la sesión', async () => {
+      mocks.rpc.mockResolvedValue({ data: 7, error: null });
+      await sync.clearAllDataSynced();
+      expect(await db.getSyncMeta()).toMatchObject({ userId: 'u1', dataUserId: 'u1', wipeEpoch: 7, migratedAt: null });
+      expect(await db.readOutbox()).toHaveLength(0);
+    });
+  });
 });
