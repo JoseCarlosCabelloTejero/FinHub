@@ -250,6 +250,9 @@ export async function clearAllDataSynced() {
   await saveSyncMeta({ userId, dataUserId: userId, wipeEpoch: Number(data), migratedAt: null });
   lastPullKey = null;
   setState({ pendingOps: 0, lastError: null });
+  // Cuanto antes se vuelva a vincular, mejor: hasta que las categorías resembradas no estén arriba,
+  // un movimiento nuevo no tendría a qué apuntar en el servidor.
+  scheduleSync();
 }
 
 // -----------------------------------------------------------------------------
@@ -330,6 +333,17 @@ function snapshotToOps({ movements, categories }: Snapshot, keep: (op: OutboxOp)
   return ops.filter(keep);
 }
 
+// Las ops de la vinculación tienen que ir DELANTE de lo que ya hubiera encolado, o un movimiento
+// escrito antes de vincular llegaría antes que su categoría y la FK lo rechazaría (y el push, al
+// verlo irrecuperable, lo descartaría). Como el outbox es autoincremental, adelantarlas obliga a
+// reescribir la cola entera. Lo anterior se conserva en vez de darlo por incluido en el snapshot:
+// un borrado pendiente no deja rastro en la caché y se perdería.
+async function prependOps(ops: OutboxOp[]) {
+  const pending = (await readOutbox()).map((entry) => entry.op);
+  await clearOutbox();
+  await enqueueOutbox([...ops, ...pending]);
+}
+
 /** Vincula este dispositivo con el servidor la primera vez. */
 // Siempre pull antes que push: subir a ciegas sobre un servidor que ya tiene datos duplicaría el
 // árbol de categorías del otro dispositivo. Es idempotente porque los ids del cliente son la clave
@@ -347,7 +361,7 @@ async function uploadEverything() {
   const local = await getAllData();
   const repaired = repairDanglingRefs(local.movements, local.categories);
   await replaceLocalData(() => repaired);
-  await enqueueOutbox(snapshotToOps(repaired));
+  await prependOps(snapshotToOps(repaired));
 }
 
 // El servidor ya tiene datos (segundo dispositivo). Manda lo remoto, pero sin tirar lo que solo
@@ -371,7 +385,7 @@ async function mergeWithServer(snapshot: Snapshot, key: string) {
     return !remote.has(op.id) || op.updatedAt !== EPOCH_UPDATED_AT;
   };
   const ops = snapshotToOps({ movements: repaired.movements, categories: candidates }, mine);
-  if (ops.length) await enqueueOutbox(ops);
+  if (ops.length) await prependOps(ops);
   // Lo encolado se reproduce sobre el snapshot, así que sobrevive a esta sustitución de la caché.
   await replaceLocalData((pending) => applyPullToLocal(snapshot, pending));
   lastPullKey = key;

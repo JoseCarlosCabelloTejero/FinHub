@@ -334,6 +334,13 @@ describe('motor de sync', () => {
       expect(pushedIds()).toContain('income');
     });
 
+    it('lo que ya estaba encolado se pushea después de las categorías que necesita', async () => {
+      await queue(opFor('m1'));
+      await sync.syncNow();
+      expect(pushedTables()[0]).toBe('categories');
+      expect(pushedIds()).toContain('m1');
+    });
+
     it('no repite la subida en el siguiente sync', async () => {
       await db.saveMovement(mov('m1', { categoryId: 'income' }));
       await sync.syncNow();
