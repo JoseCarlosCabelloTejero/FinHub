@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyPullToLocal, assembleCategories, diffCategoryDoc, fromMovementRow, monotonicStamp, repairDanglingRefs, toCategoryRow, toMovementRow, toSubRow } from './sync';
+import { defaultCategories } from './data';
 import type { Category, Movement, OutboxOp, Subcategory } from './types';
 
 // supabase.ts lanza al importarse si faltan las variables de entorno, así que los tests no pueden
@@ -155,6 +156,8 @@ describe('motor de sync', () => {
   let db: typeof import('./db');
   const netError = { code: '', message: 'Failed to fetch' };
   const queue = (...ops: OutboxOp[]) => db.enqueueOutbox(ops);
+  const pushedIds = () => mocks.upsert.mock.calls.map((call) => (call[1] as { id: string }).id);
+  const pushedTables = () => mocks.upsert.mock.calls.map((call) => call[0] as string);
   const opFor = (id: string): OutboxOp => ({ table: 'movements', kind: 'upsert', id, payload: toMovementRow(mov(id)), updatedAt: STAMP });
 
   beforeEach(async () => {
@@ -169,6 +172,9 @@ describe('motor de sync', () => {
     mocks.select.mockResolvedValue({ data: [], error: null });
     db = await import('./db');
     await db.clearAllData();
+    // Dispositivo ya vinculado: sin esto cada sync arrancaría por la primera subida, que tiene su
+    // propio bloque de tests más abajo.
+    await db.saveSyncMeta({ dataUserId: 'u1', migratedAt: T0 });
     sync = await import('./sync');
   });
   afterEach(() => vi.useRealTimers());
@@ -176,7 +182,7 @@ describe('motor de sync', () => {
   it('sube la cola en el orden en que se escribió', async () => {
     await queue(opFor('a'), opFor('b'), opFor('c'));
     await sync.syncNow();
-    expect(mocks.upsert.mock.calls.map((call) => (call[1] as { id: string }).id)).toEqual(['a', 'b', 'c']);
+    expect(pushedIds()).toEqual(['a', 'b', 'c']);
     expect(await db.readOutbox()).toHaveLength(0);
   });
 
@@ -242,9 +248,8 @@ describe('motor de sync', () => {
     await db.saveSyncMeta({ dataUserId: 'otro' });
     await queue(opFor('a'));
     await sync.syncNow();
-    expect(mocks.upsert).not.toHaveBeenCalled();
-    expect(await db.readOutbox()).toHaveLength(0);
-    expect(await db.getSyncMeta()).toMatchObject({ dataUserId: 'u1', migratedAt: null });
+    expect(pushedIds()).not.toContain('a');
+    expect(await db.getSyncMeta()).toMatchObject({ dataUserId: 'u1' });
   });
 
   it('sin sesión no toca el servidor', async () => {
@@ -290,6 +295,51 @@ describe('motor de sync', () => {
       await sync.clearAllDataSynced();
       expect(await db.getSyncMeta()).toMatchObject({ userId: 'u1', dataUserId: 'u1', wipeEpoch: 7, migratedAt: null });
       expect(await db.readOutbox()).toHaveLength(0);
+    });
+  });
+
+  // El dispositivo aún no se ha vinculado: meta.migratedAt sigue a null.
+  describe('primera vinculación', () => {
+    beforeEach(async () => db.saveSyncMeta({ migratedAt: null }));
+    const remoteSeeds = (table: string) => Promise.resolve({ data: table === 'categories' ? defaultCategories.map(toCategoryRow) : table === 'subcategories' ? defaultCategories.flatMap((c) => c.subcategories.map((s) => toSubRow(c.id, s))) : [], error: null });
+
+    it('con el servidor vacío sube todo lo local, categorías antes que movimientos', async () => {
+      await db.saveMovement(mov('m1', { categoryId: 'income' }));
+      await sync.syncNow();
+      expect(pushedIds()).toContain('m1');
+      expect(pushedTables().indexOf('movements')).toBeGreaterThan(pushedTables().lastIndexOf('categories'));
+      expect((await db.getSyncMeta()).migratedAt).not.toBeNull();
+    });
+
+    it('repara las referencias huérfanas para que la FK no rechace el movimiento', async () => {
+      await db.saveMovement(mov('m1', { categoryId: 'esta-ya-no-existe' }));
+      await sync.syncNow();
+      const pushed = mocks.upsert.mock.calls.find((call) => (call[1] as { id: string }).id === 'm1');
+      expect((pushed?.[1] as { category_id: string }).category_id).toBe('recuperados-expense');
+      expect(pushedIds()).toContain('recuperados-expense');
+    });
+
+    it('con el servidor ya poblado no reenvía las categorías por defecto intactas', async () => {
+      mocks.select.mockImplementation(remoteSeeds);
+      await db.saveMovement(mov('m1', { categoryId: 'income' }));
+      await sync.syncNow();
+      expect(pushedTables()).toEqual(['movements']);
+      expect((await db.getAllData()).movements.map((m) => m.id)).toEqual(['m1']);
+    });
+
+    it('sí reenvía una categoría que este dispositivo había tocado', async () => {
+      mocks.select.mockImplementation(remoteSeeds);
+      await db.saveCategory({ ...defaultCategories[0], name: 'Mis ingresos', updatedAt: STAMP });
+      await sync.syncNow();
+      expect(pushedIds()).toContain('income');
+    });
+
+    it('no repite la subida en el siguiente sync', async () => {
+      await db.saveMovement(mov('m1', { categoryId: 'income' }));
+      await sync.syncNow();
+      const first = mocks.upsert.mock.calls.length;
+      await sync.syncNow();
+      expect(mocks.upsert.mock.calls).toHaveLength(first);
     });
   });
 });

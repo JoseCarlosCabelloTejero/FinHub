@@ -1,4 +1,4 @@
-import { clearAllData, clearOutbox, deleteOutboxOp, enqueueOutbox, getCategory, getSyncMeta, readOutbox, removeMovement, replaceLocalData, saveCategory, saveMovement, saveSyncMeta } from './db';
+import { bootstrapData, clearAllData, clearOutbox, deleteOutboxOp, enqueueOutbox, getAllData, getCategory, getSyncMeta, readOutbox, removeMovement, replaceLocalData, saveCategory, saveMovement, saveSyncMeta } from './db';
 import { EPOCH_UPDATED_AT } from './data';
 import { resolveUserId, supabase } from './supabase';
 import type { Category, Movement, MovementType, OutboxOp, Subcategory, SyncState } from './types';
@@ -307,7 +307,75 @@ async function fetchSnapshot() {
   const failed = [movements, categories, subcategories].find((result) => result.error);
   if (failed) throw new Error(failed.error?.message ?? 'Error al descargar los datos');
   const movementRows = (movements.data ?? []) as MovementRow[], catRows = (categories.data ?? []) as CategoryRow[], subRows = (subcategories.data ?? []) as SubcategoryRow[];
-  return { key: JSON.stringify([movementRows, catRows, subRows]), snapshot: { movements: movementRows.map(fromMovementRow), categories: assembleCategories(catRows, subRows) } as Snapshot, empty: catRows.length === 0 && movementRows.length === 0 };
+  // "Vacío" se mide por categorías: no puede haber movimientos sin ellas (hay FK), así que cero
+  // categorías significa servidor virgen.
+  return { key: JSON.stringify([movementRows, catRows, subRows]), snapshot: { movements: movementRows.map(fromMovementRow), categories: assembleCategories(catRows, subRows) } as Snapshot, empty: catRows.length === 0 };
+}
+
+// -----------------------------------------------------------------------------
+// Primera vinculación del dispositivo
+// -----------------------------------------------------------------------------
+
+/** Encola un snapshot entero. Las categorías van delante porque los movimientos dependen de ellas. */
+// Va por el outbox y no en bloque a propósito: si se corta la conexión a mitad, lo ya confirmado no
+// se repite y el resto se reintenta solo. Una subida en bloque sería más rápida pero habría que
+// rehacerla entera, y esto ocurre una única vez por dispositivo.
+function snapshotToOps({ movements, categories }: Snapshot, keep: (op: OutboxOp) => boolean = () => true) {
+  const ops: OutboxOp[] = [];
+  for (const category of categories) {
+    ops.push({ table: 'categories', kind: 'upsert', id: category.id, payload: toCategoryRow(category), updatedAt: category.updatedAt });
+    for (const sub of category.subcategories) ops.push({ table: 'subcategories', kind: 'upsert', id: sub.id, payload: toSubRow(category.id, sub), updatedAt: sub.updatedAt });
+  }
+  for (const movement of movements) ops.push({ table: 'movements', kind: 'upsert', id: movement.id, payload: toMovementRow(movement), updatedAt: movement.updatedAt });
+  return ops.filter(keep);
+}
+
+/** Vincula este dispositivo con el servidor la primera vez. */
+// Siempre pull antes que push: subir a ciegas sobre un servidor que ya tiene datos duplicaría el
+// árbol de categorías del otro dispositivo. Es idempotente porque los ids del cliente son la clave
+// primaria en Postgres: repetirlo es un upsert, no una duplicación.
+async function firstSync() {
+  const { key, snapshot, empty } = await fetchSnapshot();
+  if (empty) await uploadEverything(); else await mergeWithServer(snapshot, key);
+  await saveSyncMeta({ migratedAt: new Date().toISOString() });
+}
+
+// Servidor virgen: manda lo local. bootstrapData por si la caché estaba vacía, porque el servidor
+// necesita el árbol de categorías antes que cualquier movimiento.
+async function uploadEverything() {
+  await bootstrapData();
+  const local = await getAllData();
+  const repaired = repairDanglingRefs(local.movements, local.categories);
+  await replaceLocalData(() => repaired);
+  await enqueueOutbox(snapshotToOps(repaired));
+}
+
+// El servidor ya tiene datos (segundo dispositivo). Manda lo remoto, pero sin tirar lo que solo
+// existe aquí: los movimientos son uuid y no chocan, y las categorías comparten id porque los slugs
+// son deterministas. Se sube lo que el servidor no tiene y lo que este dispositivo haya tocado; las
+// semillas intactas se reconocen por su sello de época y se descartan sin más.
+async function mergeWithServer(snapshot: Snapshot, key: string) {
+  const local = await getAllData();
+  const remoteCategories = new Set(snapshot.categories.map((category) => category.id));
+  const remoteSubs = new Set(snapshot.categories.flatMap((category) => category.subcategories.map((sub) => sub.id)));
+  const remoteMovements = new Set(snapshot.movements.map((movement) => movement.id));
+  const known = [...snapshot.categories, ...local.categories.filter((category) => !remoteCategories.has(category.id))];
+  const knownIds = new Set(known.map((category) => category.id));
+  const repaired = repairDanglingRefs(local.movements, known);
+  // Las categorías locales más las que la reparación haya tenido que inventar. Las que solo están en
+  // el servidor no se tocan: ya están donde tienen que estar.
+  const candidates = [...local.categories, ...repaired.categories.filter((category) => !knownIds.has(category.id))];
+  const mine = (op: OutboxOp) => {
+    if (op.table === 'movements') return !remoteMovements.has(op.id);
+    const remote = op.table === 'categories' ? remoteCategories : remoteSubs;
+    return !remote.has(op.id) || op.updatedAt !== EPOCH_UPDATED_AT;
+  };
+  const ops = snapshotToOps({ movements: repaired.movements, categories: candidates }, mine);
+  if (ops.length) await enqueueOutbox(ops);
+  // Lo encolado se reproduce sobre el snapshot, así que sobrevive a esta sustitución de la caché.
+  await replaceLocalData((pending) => applyPullToLocal(snapshot, pending));
+  lastPullKey = key;
+  await onRemoteChange?.();
 }
 
 async function pullAndApply() {
@@ -360,6 +428,10 @@ async function runSync() {
   try {
     const meta = await adoptUser(userId);
     await adoptWipeEpoch(meta.wipeEpoch);
+    // Antes del push: hasta que este dispositivo no se ha vinculado, su cola no basta para dejar el
+    // servidor coherente (las categorías por defecto se siembran en local y nunca pasan por ella, así
+    // que un movimiento suyo se estrellaría contra la FK).
+    if (!meta.migratedAt) await firstSync();
     if (!(await pushOutbox())) { setState({ status: 'error' }); return; }
     // Solo se hace pull con la cola vacía: aplicar el snapshot con escrituras sin subir dejaría la
     // pantalla mostrando la versión vieja de algo que el usuario acaba de escribir.
