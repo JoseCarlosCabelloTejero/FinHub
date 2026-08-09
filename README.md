@@ -1,4 +1,4 @@
-# Cielo · Finanzas personales
+# FinHub · Finanzas personales
 
 Aplicación web para registrar ingresos y gastos, consultar el ahorro y entender la evolución
 financiera mediante gráficos. Proyecto personal, sin ánimo de ser multiusuario.
@@ -27,7 +27,7 @@ dispositivos. Ahora mismo el proyecto está a mitad de esa migración:
 
 En la práctica, hoy:
 
-- **Los datos siguen viviendo en IndexedDB** (`cielo-finanzas`) y son los que la app lee y escribe.
+- **Los datos siguen viviendo en IndexedDB** (`finhub-finanzas`) y son los que la app lee y escribe.
 - **Supabase actúa como puerta de acceso**: sin iniciar sesión no se puede usar la app. Solo hay un usuario permitido (el propietario), sin registro público.
 - La cola de sincronización (`outbox`) y el esquema remoto ya existen, pero **todavía no hay nada que los conecte de verdad** (eso es la fase 4).
 

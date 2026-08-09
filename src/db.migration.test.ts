@@ -8,7 +8,7 @@ import { EPOCH_UPDATED_AT } from './data';
 describe('migración de IndexedDB v2 a v3',()=>{
   it('crea outbox y meta, rellena updatedAt y no toca los movimientos',async()=>{
     // 1. Una base tal y como la tiene hoy el navegador del usuario: v2, sin updatedAt en categorías.
-    const legacy=await openDB('cielo-finanzas',2,{upgrade(db){const movements=db.createObjectStore('movements',{keyPath:'id'});movements.createIndex('date','date');movements.createIndex('type','type');db.createObjectStore('categories',{keyPath:'id'});db.createObjectStore('preferences')}});
+    const legacy=await openDB('finhub-finanzas',2,{upgrade(db){const movements=db.createObjectStore('movements',{keyPath:'id'});movements.createIndex('date','date');movements.createIndex('type','type');db.createObjectStore('categories',{keyPath:'id'});db.createObjectStore('preferences')}});
     await legacy.put('categories',{id:'expense-coche',name:'Coche',type:'expense',order:0,archived:false,subcategories:[{id:'expense-coche-gasolina',name:'Gasolina',order:0,archived:false}]});
     await legacy.put('movements',{id:'m1',type:'expense',amount:42.5,date:'2026-08-01',categoryId:'expense-coche',subcategoryId:'expense-coche-gasolina',concept:'Repostaje',createdAt:'2026-08-01T09:00:00.000Z',updatedAt:'2026-08-01T09:00:00.000Z'});
     legacy.close(); // si no se cierra, la transacción versionchange de la v3 se queda bloqueada

@@ -20,7 +20,7 @@ Requiere Node.js 20+. Comprobación completa antes de dar algo por terminado: `n
 
 ## Arquitectura
 
-App local-first de finanzas personales (marca "Cielo"). **No hay backend, ni cuentas, ni red**: todo persiste en IndexedDB del navegador (`cielo-finanzas`). Cualquier propuesta que implique servidor, sync o telemetría rompe la premisa del proyecto.
+App local-first de finanzas personales (marca "FinHub"). **No hay backend, ni cuentas, ni red**: todo persiste en IndexedDB del navegador (`finhub-finanzas`). Cualquier propuesta que implique servidor, sync o telemetría rompe la premisa del proyecto.
 
 Flujo de datos, de abajo arriba:
 

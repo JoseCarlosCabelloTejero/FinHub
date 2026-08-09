@@ -16,12 +16,21 @@ interface FinanceDB extends DBSchema {
 // de migración, no parte del modelo, así que no vive en types.ts.
 type LegacyCategory = Omit<Category, 'updatedAt' | 'subcategories'> & { updatedAt?: string; subcategories: (Omit<Category['subcategories'][number], 'updatedAt'> & { updatedAt?: string })[] };
 
-const DB_NAME = 'cielo-finanzas';
+const DB_NAME = 'finhub-finanzas';
+// Nombre de la base bajo la marca anterior ("Cielo"). IndexedDB no tiene "rename": un nombre nuevo
+// es una base vacía. migrateFromLegacyDb copia los datos una sola vez para no dejar huérfano el
+// histórico de quien ya tuviera movimientos guardados antes del cambio de marca.
+const LEGACY_DB_NAME = 'cielo-finanzas';
 const DEFAULT_SYNC_META: SyncMeta = { userId: null, migratedAt: null, lastSyncAt: null, wipeEpoch: 0, lastStampAt: null };
 const META_KEY = 'sync';
 
+// true solo si la base "finhub-finanzas" no existía y se ha creado ahora mismo (oldVersion 0):
+// es la única situación en la que tiene sentido buscar datos bajo el nombre antiguo.
+let isFreshDb = false;
+
 export const dbPromise = openDB<FinanceDB>(DB_NAME, 3, {
   async upgrade(db, oldVersion, _newVersion, tx) {
+    if (oldVersion === 0) isFreshDb = true;
     if (oldVersion < 1) {
       const movements = db.createObjectStore('movements', { keyPath: 'id' });
       movements.createIndex('date', 'date'); movements.createIndex('type', 'type');
@@ -40,7 +49,32 @@ export const dbPromise = openDB<FinanceDB>(DB_NAME, 3, {
       for (const category of rows) categories.put({ ...category, updatedAt: category.updatedAt ?? EPOCH_UPDATED_AT, subcategories: category.subcategories.map((sub) => ({ ...sub, updatedAt: sub.updatedAt ?? EPOCH_UPDATED_AT })) } as Category);
     }
   },
-});
+}).then(async (db) => { if (isFreshDb) await migrateFromLegacyDb(db); return db; });
+
+// Copia única de 'cielo-finanzas' a 'finhub-finanzas' cuando esta última se acaba de crear.
+// indexedDB.databases() es necesario para comprobar que la base antigua existe SIN abrirla: abrir
+// por nombre con openDB la crearía vacía si no existiera, y con eso perderíamos la comprobación.
+async function migrateFromLegacyDb(db: Awaited<ReturnType<typeof openDB<FinanceDB>>>) {
+  if (typeof indexedDB.databases !== 'function') return;
+  const existing = await indexedDB.databases();
+  if (!existing.some((entry) => entry.name === LEGACY_DB_NAME)) return;
+  const legacy = await openDB<FinanceDB>(LEGACY_DB_NAME);
+  const [movements, categories, preferences, outboxKeys, outboxOps, meta] = await Promise.all([
+    legacy.getAll('movements'), legacy.getAll('categories'), legacy.get('preferences', 'main'),
+    legacy.getAllKeys('outbox'), legacy.getAll('outbox'), legacy.get('meta', META_KEY),
+  ]);
+  legacy.close();
+  if (!movements.length && !categories.length) return; // base antigua vacía: nada que copiar
+  const tx = db.transaction(['movements', 'categories', 'preferences', 'outbox', 'meta'], 'readwrite');
+  await Promise.all([
+    ...movements.map((m) => tx.objectStore('movements').put(m)),
+    ...categories.map((c) => tx.objectStore('categories').put(c)),
+    ...(preferences ? [tx.objectStore('preferences').put(preferences, 'main')] : []),
+    ...outboxOps.map((op, i) => tx.objectStore('outbox').put(op, outboxKeys[i])),
+    ...(meta ? [tx.objectStore('meta').put(meta, META_KEY)] : []),
+    tx.done,
+  ]);
+}
 
 export async function bootstrapData() {
   const db = await dbPromise;
