@@ -23,7 +23,7 @@ dispositivos. Ahora mismo el proyecto está a mitad de esa migración:
 | 1 | App local-first sobre IndexedDB (modelo, cálculos, UI, gráficos) | ✅ hecho |
 | 2 | Esquema Postgres en Supabase (RLS, `updated_at` para LWW) + migración de IndexedDB a v3 (stores `outbox`/`meta`) | ✅ hecho |
 | 3 | Login obligatorio con email y contraseña de Supabase (un único usuario, el propietario) | ✅ hecho |
-| 4 | Motor de sync real (subir/bajar movimientos y categorías, resolución de conflictos *last-write-wins*) | ⏳ pendiente |
+| 4 | Motor de sync real (subir/bajar movimientos y categorías, resolución de conflictos *last-write-wins*) | ✅ hecho |
 
 En la práctica, hoy:
 
