@@ -52,8 +52,24 @@ export interface OutboxOp {
 // las preferencias: así queda tipado de verdad en vez de ser un saco de pares clave-valor.
 export interface SyncMeta {
   userId: string | null;
+  // De quién son los datos que hay cacheados en IndexedDB. NO es lo mismo que `userId`, que
+  // resolveUserId() sobrescribe con el usuario actual en cada arranque: sin este campo aparte,
+  // un cambio de usuario en el mismo navegador sería indetectable y mezclaría los dos históricos.
+  dataUserId: string | null;
   migratedAt: string | null;
   lastSyncAt: string | null;
   wipeEpoch: number;
   lastStampAt: string | null;
+}
+
+export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error' | 'auth-required';
+
+// Lo que la UI necesita saber del sync. `lastError` guarda el motivo de la última op descartada por
+// ser irrecuperable, que es el único fallo que el usuario no puede deducir de `status` (el resto se
+// reintentan solos).
+export interface SyncState {
+  status: SyncStatus;
+  pendingOps: number;
+  lastSyncAt: string | null;
+  lastError: string | null;
 }

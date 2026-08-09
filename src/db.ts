@@ -21,7 +21,10 @@ const DB_NAME = 'finhub-finanzas';
 // es una base vacía. migrateFromLegacyDb copia los datos una sola vez para no dejar huérfano el
 // histórico de quien ya tuviera movimientos guardados antes del cambio de marca.
 const LEGACY_DB_NAME = 'cielo-finanzas';
-const DEFAULT_SYNC_META: SyncMeta = { userId: null, migratedAt: null, lastSyncAt: null, wipeEpoch: 0, lastStampAt: null };
+// Los campos nuevos no obligan a subir la versión de la base: `meta` es un store out-of-line con un
+// único registro y getSyncMeta lo mergea con estos defaults, así que un registro viejo se completa
+// solo al leerlo.
+const DEFAULT_SYNC_META: SyncMeta = { userId: null, dataUserId: null, migratedAt: null, lastSyncAt: null, wipeEpoch: 0, lastStampAt: null };
 const META_KEY = 'sync';
 
 // true solo si la base "finhub-finanzas" no existía y se ha creado ahora mismo (oldVersion 0):
@@ -87,11 +90,29 @@ export async function getAllData() { const db = await dbPromise; return { moveme
 export async function saveMovement(movement: Movement) { return (await dbPromise).put('movements', movement); }
 export async function removeMovement(id: string) { return (await dbPromise).delete('movements', id); }
 export async function saveCategory(category: Category) { return (await dbPromise).put('categories', category); }
+export async function getCategory(id: string) { return (await dbPromise).get('categories', id); }
 export async function savePreferences(value: Preferences) { return (await dbPromise).put('preferences', value, 'main'); }
 export async function loadPreferences() { return (await dbPromise).get('preferences', 'main'); }
 // Vacía también outbox y meta: dejar ops encoladas tras un "Borrar todo" repoblaría el servidor
 // recién vaciado. meta es bookkeeping reconstruible (el epoch se relee, la migración es idempotente).
 export async function clearAllData() { const db = await dbPromise; const tx = db.transaction(['movements','categories','preferences','outbox','meta'], 'readwrite'); await Promise.all([tx.objectStore('movements').clear(),tx.objectStore('categories').clear(),tx.objectStore('preferences').clear(),tx.objectStore('outbox').clear(),tx.objectStore('meta').clear(),tx.done]); await bootstrapData(); }
+
+// Aplica un snapshot del servidor sobre la caché local. `compute` recibe las ops que aún estaban sin
+// subir y devuelve el estado final; la mezcla vive en sync.ts, aquí solo la atomicidad.
+// El outbox entra en la transacción aunque solo se lea: al declararlo readwrite, IndexedDB bloquea
+// cualquier encolado concurrente hasta que esto termina, y así ninguna escritura del usuario cae en
+// la ventana entre "leo lo pendiente" y "reemplazo la caché". compute es síncrona a propósito: un
+// await de algo ajeno a la base cerraría la transacción antes de tiempo.
+export async function replaceLocalData(compute: (pending: OutboxOp[]) => { movements: Movement[]; categories: Category[] }) {
+  const tx = (await dbPromise).transaction(['movements', 'categories', 'outbox'], 'readwrite');
+  const next = compute(await tx.objectStore('outbox').getAll());
+  await Promise.all([
+    tx.objectStore('movements').clear(), tx.objectStore('categories').clear(),
+    ...next.movements.map((movement) => tx.objectStore('movements').put(movement)),
+    ...next.categories.map((category) => tx.objectStore('categories').put(category)),
+    tx.done,
+  ]);
+}
 
 export async function enqueueOutbox(ops: OutboxOp[]) { const tx = (await dbPromise).transaction('outbox', 'readwrite'); await Promise.all([...ops.map((op) => tx.store.add(op)), tx.done]); }
 // getAllKeys y getAll devuelven ambos en orden de clave, así que el zip empareja bien.
