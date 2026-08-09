@@ -501,6 +501,9 @@ export function initSync(onChange: () => Promise<void>) {
   document.addEventListener('visibilitychange', whenVisible);
   const poll = window.setInterval(whenVisible, POLL_MS);
   void readOutbox().then((queued) => setState({ pendingOps: queued.length }));
+  // lastSyncAt se persiste en meta pero el estado en memoria arranca a null: sin esto, al recargar la
+  // página la UI diría "todo al día" sin fecha hasta que terminara el primer sync (y sin red, nunca).
+  void getSyncMeta().then((meta) => setState({ lastSyncAt: meta.lastSyncAt }));
   void syncNow();
   return () => {
     window.removeEventListener('online', wake);

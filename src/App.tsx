@@ -1,5 +1,5 @@
-import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, BarChart3, CalendarRange, ChevronDown, ChevronUp, CirclePlus, LayoutDashboard, List, LogOut, Pencil, Plus, Search, Settings2, Table2, Trash2, WalletCards, X } from 'lucide-react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { ArrowDownLeft, ArrowUpRight, BarChart3, CalendarRange, ChevronDown, ChevronUp, CirclePlus, LayoutDashboard, List, Pencil, Plus, Search, Settings2, Table2, Trash2, WalletCards, X } from 'lucide-react';
 import { addMonths, addYears, format, parseISO, subMonths, subYears } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { categoryData, filterPeriod, money, percent, summary, topCategories, trendData, weeklyBreakdown } from './calculations';
@@ -8,8 +8,10 @@ import { CATEGORY_LIMIT } from './theme';
 import { bootstrapData, getAllData, loadPreferences, savePreferences } from './db';
 // Las escrituras pasan por sync.ts y no por db.ts: además de guardar en IndexedDB encolan la
 // operación para subirla. Las lecturas y las preferencias (que no se sincronizan) siguen en db.ts.
-import { clearAllDataSynced, initSync, removeMovementSynced, saveCategorySynced, saveMovementSynced } from './sync';
+import { clearAllDataSynced, getSyncState, initSync, removeMovementSynced, saveCategorySynced, saveMovementSynced, subscribeSyncState } from './sync';
 import { onAuthChange, resolveUserId, signOut } from './supabase';
+import { SyncChip, SyncNote } from './SyncStatus';
+import { needsAttention, syncCopy } from './syncCopy';
 import Login from './Login';
 import type { Category, Movement, MovementType, Preferences } from './types';
 const TrendChart = lazy(() => import('./Charts').then(m=>({default:m.TrendChart})));
@@ -49,14 +51,28 @@ function Finances() {
   useEffect(()=>{let stop:(()=>void)|undefined;let dead=false;(async()=>{await bootstrapData();await reload();const saved=await loadPreferences();if(saved)setPrefs(saved);setLoading(false);if(!dead)stop=initSync(()=>reloadRef.current())})();return()=>{dead=true;stop?.()}},[]);
   useEffect(()=>{if(!loading)savePreferences(prefs)},[prefs,loading]);
   const inPeriod=useMemo(()=>filterPeriod(movements,prefs.selectedDate,prefs.periodMode),[movements,prefs]); const totals=useMemo(()=>summary(inPeriod),[inPeriod]);
-  const flash=(text:string)=>{setNotice(text);window.setTimeout(()=>setNotice(''),2500)};
+  // useCallback para poder usarlo como dependencia de los efectos de aviso sin rearmarlos en cada render.
+  const flash=useCallback((text:string)=>{setNotice(text);window.setTimeout(()=>setNotice(''),2500)},[]);
+  // Un único suscriptor al estado del sync; de aquí baja por props al chip y a la nota del aside.
+  const sync=useSyncExternalStore(subscribeSyncState,getSyncState);
+  // Los avisos salen de la propia suscripción y no de un efecto sobre `sync`: aquí se ve el estado
+  // anterior y el nuevo sin compararlos entre renders. Solo se anuncia lo que no se deduce de la
+  // pantalla —quedarse sin red, un sync fallido, la sesión caducada— y nunca el ciclo syncing→idle
+  // del sondeo de cada minuto. Reutiliza la región aria-live de abajo en vez de crear una segunda.
+  useEffect(()=>{let last=getSyncState();return subscribeSyncState(next=>{
+    if(next.status!==last.status&&needsAttention(next))flash(syncCopy(next).label);
+    if(next.lastError&&next.lastError!==last.lastError)flash(next.lastError);
+    last=next;
+  })},[flash]);
   const openForm=(movement?:Movement)=>{setEditing(movement||null);setModal(true)};
   const onSaved=async(m:Movement)=>{await saveMovementSynced(m);await reload();setModal(false);flash(editing?'Movimiento actualizado':'Movimiento añadido')};
   const deleteOne=async(m:Movement)=>{if(confirm(`¿Eliminar “${m.concept}”? Esta acción no se puede deshacer.`)){await removeMovementSynced(m.id);await reload();flash('Movimiento eliminado')}};
   if(loading)return <div className="loading">Preparando tu espacio financiero…</div>;
   return <div className="app-shell">
-    <aside><div className="brand"><span><WalletCards/></span><div><b>FinHub</b><small>Finanzas personales</small></div></div><nav>{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><div className="aside-note"><span>Datos privados</span><p>Todo permanece en este navegador.</p><button className="sign-out" onClick={()=>signOut()}><LogOut/>Cerrar sesión</button></div></aside>
-    <main><header><div><span className="eyebrow">Tu dinero, con claridad</span><h1>{pages.find(p=>p[0]===page)![3]}</h1></div>{page!=='categories'&&<button className="primary" onClick={()=>openForm()}><Plus/>Nuevo movimiento</button>}</header>
+    <aside><div className="brand"><span><WalletCards/></span><div><b>FinHub</b><small>Finanzas personales</small></div></div><nav>{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><SyncNote state={sync} onSignOut={()=>{void signOut()}}/></aside>
+    {/* El chip vive en la cabecera y no solo en el aside porque el aside desaparece por debajo de
+        760px, que es justo el caso en el que saber si el móvil ha sincronizado importa más. */}
+    <main><header><div><span className="eyebrow">Tu dinero, con claridad</span><h1>{pages.find(p=>p[0]===page)![3]}</h1></div><div className="header-side"><SyncChip state={sync}/>{page!=='categories'&&<button className="primary" onClick={()=>openForm()}><Plus/>Nuevo movimiento</button>}</div></header>
     {page==='summary'&&<Summary prefs={prefs} setPrefs={setPrefs} totals={totals} items={inPeriod} categories={categories}/>}
     {page==='weekly'&&<Weekly prefs={prefs} setPrefs={setPrefs} movements={movements} categories={categories}/>}
     {page==='movements'&&<Movements items={movements} categories={categories} onEdit={openForm} onDelete={deleteOne}/>}
