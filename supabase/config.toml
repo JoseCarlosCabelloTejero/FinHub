@@ -17,7 +17,9 @@ extra_search_path = ["public", "extensions"]
 # for accidental or malicious requests.
 # Subido desde 1000: el sync hace pull COMPLETO sin paginar y PostgREST trunca en
 # silencio, sin error. Con 1000, pasar de mil movimientos vaciaria el historico del
-# cliente sin avisar. Hay que replicar este valor en el dashboard del proyecto remoto.
+# cliente sin avisar. Lo que importa no es clavar este numero en el dashboard remoto,
+# sino que alli quede MUY por encima de los movimientos esperados: produccion esta en
+# 10000 a proposito (mas de cinco anos a cinco movimientos diarios).
 max_rows = 100000
 # Controls whether new tables, views, sequences and functions created in the `public` schema by
 # `postgres` are reachable through the Data API roles (`anon`, `authenticated`, `service_role`)
@@ -177,7 +179,7 @@ enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
 # OFF a proposito: la app es de un unico usuario, creado a mano desde Studio (la API de admin no pasa
-# por este flag). Hay que replicarlo en el dashboard del proyecto remoto. Ver docs/supabase-auth.md.
+# por este flag). Hay que replicarlo en el dashboard del proyecto remoto. Ver docs/modules/supabase-auth.md.
 enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false

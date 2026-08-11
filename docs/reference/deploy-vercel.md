@@ -77,9 +77,13 @@ Además de lo que ya lista [[supabase-auth]] (signup OFF, confirm email OFF, usu
 
 1. *Authentication → URL Configuration* → **Site URL** = `https://fin-hub-tau.vercel.app`. Con login por
    contraseña no hay correos con enlace, así que no hace falta lista de redirects.
-2. **Settings → API → Max rows = `100000`**, replicando `supabase/config.toml`. Si se queda en el default
-   (1000) **el pull trunca sin avisar** y parecerá que faltan movimientos: el sync hace una lectura completa
-   sin paginar. Es la trampa más silenciosa del deploy. → [[pull]]
+2. **Settings → API → Max rows**. Si se queda en el default (**1000**) **el pull trunca sin avisar** y
+   parecerá que faltan movimientos: el sync hace una lectura completa sin paginar. Es la trampa más
+   silenciosa del deploy. → [[pull]]
+   **Valor actual en producción: `10000`** (`supabase/config.toml` usa `100000` para el entorno local; no
+   hace falta que coincidan, solo que el remoto quede muy por encima del histórico real). 10000 dan de
+   sobra: son más de cinco años a cinco movimientos diarios. Si algún día el histórico se acercara a esa
+   cifra, **hay que subirlo antes de llegar**, porque el día que se cruce no habrá ningún error.
 
 ## Instalación en el móvil
 
