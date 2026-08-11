@@ -28,7 +28,9 @@ npm test && npm run lint && npm run build
 
 ## Node y gestor de paquetes
 
-- **Node.js 20+** (`.nvmrc` → `20`). Con `nvm`: `nvm use`.
+- **Node.js 22** (`.nvmrc` → `22`, y `engines.node: "22.x"` en `package.json`). Con `nvm`: `nvm use`.
+  Está **fijado a una major**, no en un rango abierto, para que local, CI y Vercel construyan lo mismo.
+  → [[deploy-vercel]]
 - **npm, no pnpm.** Mezclar los dos en `node_modules` rompe el dev server; si pasa:
   `rm -rf node_modules && npm install`. `pnpm-lock.yaml` está en `.gitignore` justo por eso.
 - Las dependencias están declaradas como `"latest"` en `package.json` (salvo `jsdom` y `jest-dom`), así
