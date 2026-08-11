@@ -6,3 +6,11 @@ coverage
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+
+# Claude Code local config y agent skills (instalación personal, no se comparte)
+.claude/
+.agents/
+skills-lock.json
+
+# el proyecto usa npm, no pnpm
+pnpm-lock.yaml
