@@ -14,3 +14,6 @@ skills-lock.json
 
 # el proyecto usa npm, no pnpm
 pnpm-lock.yaml
+
+# Estado de workspace de Obsidian sobre el vault de docs/: cambia cada vez que se abre
+.obsidian/
