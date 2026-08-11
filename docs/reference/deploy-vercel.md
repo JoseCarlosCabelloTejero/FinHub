@@ -10,7 +10,7 @@ contrapartidas están en [[008-deploy-en-vercel]]; aquí está la mecánica.
 
 **Fuente de verdad**: `vercel.json` · `.github/workflows/ci.yml` · `vite.config.ts` · dashboards de Vercel y Supabase
 
-- **Producción**: `https://<pendiente>.vercel.app` ← rellenar con el dominio real
+- **Producción**: https://fin-hub-tau.vercel.app
 - **Repo**: `JoseCarlosCabelloTejero/FinHub` (privado), rama por defecto `main`
 
 ## Quién despliega qué
@@ -75,7 +75,7 @@ Development** del proyecto de Vercel. → [[comandos-y-entorno]]
 
 Además de lo que ya lista [[supabase-auth]] (signup OFF, confirm email OFF, usuario propietario creado):
 
-1. *Authentication → URL Configuration* → **Site URL** = el dominio de producción. Con login por
+1. *Authentication → URL Configuration* → **Site URL** = `https://fin-hub-tau.vercel.app`. Con login por
    contraseña no hay correos con enlace, así que no hace falta lista de redirects.
 2. **Settings → API → Max rows = `100000`**, replicando `supabase/config.toml`. Si se queda en el default
    (1000) **el pull trunca sin avisar** y parecerá que faltan movimientos: el sync hace una lectura completa
