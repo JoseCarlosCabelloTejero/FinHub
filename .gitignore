@@ -7,6 +7,9 @@ coverage
 vite.config.js
 vite.config.d.ts
 
+# Enlace local al proyecto de Vercel (project.json con los IDs), lo crea la CLI
+.vercel
+
 # Claude Code local config y agent skills (instalación personal, no se comparte)
 .claude/
 .agents/

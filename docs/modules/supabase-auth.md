@@ -91,9 +91,8 @@ que hacerlo a mano** en el proyecto remoto:
 3. **Cambiar o recuperar la contraseña** — desde el mismo panel (Users → ⋮ → Reset password). La app
    **no tiene** flujo de "olvidé mi contraseña" a propósito: implicaría correos de reset y redirect
    URLs para una app de una sola persona.
-
-`Site URL` y las redirect URLs se configuran en la **fase 6 (deploy)**, aún pendiente. Con login por
-contraseña no hacen falta redirects de correo, que es una de las ventajas frente al magic link.
+4. **Authentication → URL Configuration → Site URL** — ya configurada con el dominio de producción. Con login por contraseña **no hacen falta
+   redirects de correo**, que es una de las ventajas frente al magic link. → [[deploy-vercel]]
 
 ### Entorno local (`supabase start`)
 

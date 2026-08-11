@@ -36,7 +36,7 @@ npm test && npm run lint && npm run build
 
 ## Variables de entorno
 
-`.env.local` (**no versionado**, ver `.env.example`):
+`.env.local` (**no versionado**, ver `.env.example`). En producción viven en Vercel → [[deploy-vercel]]:
 
 ```
 VITE_SUPABASE_URL=
@@ -45,6 +45,9 @@ VITE_SUPABASE_ANON_KEY=
 
 `src/supabase.ts` **lanza un error en el arranque** si falta alguna, en vez de dejar un cliente a medio
 construir. **Síntoma típico: pantalla en blanco → te falta `.env.local`.** → [[supabase-auth]]
+
+Por eso `vite.config.ts` lleva un plugin (`apply: 'build'`) que **aborta el build** si falta alguna: así el
+fallo salta en el log de Vercel y no como una pantalla en blanco en el móvil.
 
 ## Supabase en local
 
@@ -78,9 +81,9 @@ index.html      fragmento mínimo a propósito; Vite inyecta el resto
 ```
 
 - **`vite.config.ts` también configura Vitest** (jsdom + globals + setupFiles); no hay `vitest.config`.
-- **Artefactos ignorados que no hay que editar**: `dist/`, `vite.config.js`/`.d.ts`, `*.tsbuildinfo`
-  (`tsconfig.app.tsbuildinfo` está trackeado por accidente de un commit previo).
+- **Artefactos ignorados que no hay que editar**: `dist/`, `vite.config.js`/`.d.ts`, `*.tsbuildinfo`.
 - `.claude/`, `.agents/` y `skills-lock.json` están ignorados: son instalación personal.
+- `.vercel/` también está ignorado: es el enlace local al proyecto, lo crea la CLI. → [[deploy-vercel]]
 
 ## Flujo de trabajo
 
@@ -88,7 +91,7 @@ index.html      fragmento mínimo a propósito; Vite inyecta el resto
   `<tipo>/<descripcion-en-kebab-case>` con el mismo `<tipo>` que los commits convencionales (`feat`,
   `fix`, `docs`, `chore`, `refactor`, `test`). No se commitea directamente sobre `main`.
 - **Commits convencionales**, pequeños y en español. **Nunca `Co-Authored-By`.**
-- Fase pendiente: **6 — deploy estático** para entrar desde el móvil. Ahí habrá que configurar
-  `Site URL` y las redirect URLs en el dashboard. → [[architecture-overview]]
+- **El PR es el único camino a producción**: Vercel despliega `main` solo, y cada PR trae su preview URL.
+  La Action de CI (`npm ci` + test + lint + build) es un semáforo, no una puerta. → [[deploy-vercel]]
 
 Related: [[testing]] · [[supabase-auth]] · [[postgres-schema]] · [[qa-playbook]]
