@@ -54,6 +54,12 @@ Flujo de datos, de abajo arriba:
 - Acciones destructivas confirman: borrar un movimiento pide una confirmación, "Borrar todo" pide dos.
 - `src/test/setup.ts` carga `fake-indexeddb/auto` y jest-dom; los tests de `db.ts` dependen de eso y de `clearAllData()` en `beforeEach`.
 
+## Flujo de ramas
+
+- Antes de implementar cualquier cambio (feature, fix, doc o chore), crea una rama nueva desde `main`. No commitees directamente sobre `main`.
+- Nombre de rama: `<tipo>/<descripcion-corta-en-kebab-case>`, usando el mismo `<tipo>` que ya usan los commits convencionales de este repo: `feat`, `fix`, `docs`, `chore` (y `refactor`/`test` si aplica). Ejemplos: `feat/indicador-sync`, `fix/cola-vinculacion`, `docs/actualiza-readme`, `chore/actualiza-dependencias`.
+- Esta regla aplica también a Claude Code: al empezar a implementar algo no trivial en este repo, crea primero la rama correspondiente (`git checkout -b <tipo>/<descripcion>`) antes de tocar archivos.
+
 ## Notas del repo
 
 - `referencia.html` en la raíz es el mockup de diseño original, fuera del build. Útil como referencia visual.
