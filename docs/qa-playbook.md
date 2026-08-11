@@ -5,9 +5,10 @@ up: "[[00-index]]"
 
 # QA playbook
 
-Lo que **solo** se valida a mano en un navegador real. Los tests unitarios cubren la lógica pura del
-sync (diff, mezcla, reparación, sellos) pero **ningún test ejerce el ciclo completo** contra Supabase:
-no hay tests de integración ni de `initSync`. Ver [[testing]] para el reparto exacto.
+Lo que **solo** se valida a mano en un navegador real. Los tests cubren la lógica pura del sync **y** el
+motor (push, vinculación, wipe) contra un **cliente de Supabase mockeado**; lo que ningún test ejerce es
+el **Postgres de verdad** —FK, RLS, triggers LWW y de lápidas— ni `initSync` con sus disparadores del
+navegador. Ver [[testing]] para el reparto exacto.
 
 Antes de nada, la comprobación automática:
 
