@@ -34,7 +34,7 @@ En la práctica, hoy:
 - La cola (`outbox`) sube los cambios en cuanto hay red y el pull baja el estado del servidor al arrancar, al volver la conexión, al recuperar la pestaña y cada minuto. La cabecera y el aside dicen en todo momento si hay algo sin subir.
 
 Detalles de la arquitectura, patrones a respetar y comandos completos: [`CLAUDE.md`](./CLAUDE.md).
-Cómo está configurada la autenticación (incluido lo que solo se hace a mano en el dashboard de Supabase): [`docs/supabase-auth.md`](./docs/supabase-auth.md).
+La documentación en profundidad vive en [`docs/`](./docs/00-index.md), un vault de Obsidian con los módulos, los flujos (con diagramas), la referencia del esquema y las decisiones de arquitectura. Cómo está configurada la autenticación, incluido lo que solo se hace a mano en el dashboard de Supabase: [`docs/modules/supabase-auth.md`](./docs/modules/supabase-auth.md).
 
 ## Stack
 
@@ -50,7 +50,7 @@ cp .env.example .env.local   # rellenar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_K
 npm run dev
 ```
 
-Cómo dar de alta el único usuario permitido y configurar el proyecto de Supabase: [`docs/supabase-auth.md`](./docs/supabase-auth.md).
+Cómo dar de alta el único usuario permitido y configurar el proyecto de Supabase: [`docs/modules/supabase-auth.md`](./docs/modules/supabase-auth.md).
 
 Para una versión de producción:
 
