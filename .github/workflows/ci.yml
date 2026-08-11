@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Un push nuevo cancela el run anterior de la misma rama: no acumular colas.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: test · lint · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      # Las dependencias están declaradas "latest": el pin real es package-lock.json.
+      - run: npm ci
+      # Los tests mockean ./supabase a propósito, así que pasan sin credenciales.
+      - run: npm test
+      - run: npm run lint
+      # Aquí es donde corre `tsc -b`. Valores dummy porque el guard de vite.config.ts exige
+      # las variables: las reales viven solo en Vercel y no hacen falta para type-checkear.
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://ci.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-dummy-anon-key
