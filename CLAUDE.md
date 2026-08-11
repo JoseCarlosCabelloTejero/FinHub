@@ -34,6 +34,7 @@ Atajos habituales:
 - Toco cálculos, periodos o semanas → `docs/modules/calculations.md`, `docs/domains/periodos.md`.
 - Toco auth o el arranque → `docs/modules/supabase-auth.md`, `docs/flows/login.md`.
 - Toco colores o accesibilidad → `docs/modules/design-system.md`.
+- Toco el deploy, el CI o las variables de entorno → `docs/reference/deploy-vercel.md`.
 
 **Contrapartida obligatoria**: si un cambio altera la arquitectura, un patrón, el esquema o el flujo de
 sync, **actualiza la nota afectada en el mismo PR**. Cuando una nota y el código discrepen, gana el
@@ -41,8 +42,9 @@ código: se arregla la nota.
 
 ## Arquitectura
 
-App de finanzas personales (marca "FinHub") para **un único usuario**. Nació local-first y hoy está a
-mitad de una migración consciente a Supabase (fases 1-5 hechas; **la 6, el deploy, está pendiente**).
+App de finanzas personales (marca "FinHub") para **un único usuario**. Nació local-first y hoy está
+migrada a Supabase, con las seis fases hechas: se despliega en **Vercel** al mergear a `main`, y la
+GitHub Action de CI es un semáforo, no una puerta (ver `docs/reference/deploy-vercel.md`).
 
 Modelo actual: **se escribe siempre primero en local**, así que la app funciona sin conexión;
 **Supabase es la fuente de verdad y además la puerta de acceso** — sin iniciar sesión no se puede usar.
@@ -99,6 +101,6 @@ Flujo de datos, de abajo arriba:
 - `referencia.html` en la raíz es el mockup de diseño original, fuera del build. Útil como referencia visual.
 - `index.html` es un fragmento mínimo a propósito; Vite inyecta el resto.
 - `vite.config.ts` también configura Vitest (jsdom + globals), no hay `vitest.config` aparte.
-- `dist/`, `vite.config.js`/`.d.ts` y los `*.tsbuildinfo` son artefactos ignorados por git; no los edites (`tsconfig.app.tsbuildinfo` está trackeado por accidente de un commit previo).
+- `dist/`, `vite.config.js`/`.d.ts`, los `*.tsbuildinfo` y `.vercel/` son artefactos ignorados por git; no los edites.
 - `docs/` es el vault de Obsidian (se abre con *Open folder as vault*). Los enlaces entre notas son wikilinks `[[nombre-de-fichero]]`, sin ruta ni extensión, así que **los nombres de nota son únicos en todo el vault**. `.obsidian/` está ignorado por git.
 - `.env.local` no está versionado (ver `.env.example`). Para levantar Supabase en local: `npx supabase start` (Studio en `:54323`); detalles en `docs/reference/comandos-y-entorno.md`.

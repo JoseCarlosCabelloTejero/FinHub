@@ -52,6 +52,7 @@ barato que grepear `src/` entero y el esquema SQL.
 - [[indexeddb-stores]] — stores, claves e índices de la base local.
 - [[testing]] — qué cubre cada fichero de test y qué no se puede testear.
 - [[comandos-y-entorno]] — scripts, variables de entorno, Supabase local, trampas del repo.
+- [[deploy-vercel]] — cómo se publica: Vercel, CI, y lo que se configura a mano en los dashboards.
 - [[qa-playbook]] — lo que solo se valida a mano en el navegador.
 
 ## 🧭 Decisiones de arquitectura (ADR)
@@ -63,6 +64,7 @@ barato que grepear `src/` entero y el esquema SQL.
 - [[005-categorias-se-archivan]] — sin política DELETE en RLS.
 - [[006-un-solo-usuario]] — tres capas cierran el acceso.
 - [[007-subcategorias-normalizadas-en-servidor]] — embebidas en cliente, filas en Postgres.
+- [[008-deploy-en-vercel]] — Vercel despliega; la Action de CI es semáforo, no puerta.
 
 ## Cómo está organizado el grafo
 

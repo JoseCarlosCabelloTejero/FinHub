@@ -5,7 +5,7 @@ up: "[[00-index]]"
 
 # ADR 001 — De local-first puro a Supabase
 
-**Estado**: aceptada · fases 1-5 implementadas, **fase 6 (deploy) pendiente**
+**Estado**: aceptada · las seis fases implementadas; el deploy, en [[008-deploy-en-vercel]]
 
 ## Contexto
 

@@ -25,7 +25,7 @@ dispositivos. Ahora mismo el proyecto está a mitad de esa migración:
 | 3 | Login obligatorio con email y contraseña de Supabase (un único usuario, el propietario) | ✅ hecho |
 | 4 | Motor de sync real (subir/bajar movimientos y categorías, resolución de conflictos *last-write-wins*) | ✅ hecho |
 | 5 | Indicador de estado de sincronización en la interfaz | ✅ hecho |
-| 6 | Deploy estático para poder entrar desde el móvil | ⏳ pendiente |
+| 6 | Deploy en Vercel con CI en GitHub Actions, e instalable en el móvil | ✅ hecho |
 
 En la práctica, hoy:
 

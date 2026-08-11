@@ -24,7 +24,7 @@ iniciar sesión no se puede usar la app.*
 | 3 | Login obligatorio con email y contraseña, un único usuario | ✅ |
 | 4 | Motor de sync (push/pull, resolución de conflictos *last-write-wins*) | ✅ |
 | 5 | Indicador de estado de sincronización en la interfaz | ✅ |
-| 6 | Deploy estático para entrar desde el móvil | ⏳ **pendiente** |
+| 6 | Deploy en Vercel + CI en GitHub Actions, instalable en el móvil | ✅ |
 
 ## Capas
 
