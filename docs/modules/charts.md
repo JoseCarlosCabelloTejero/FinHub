@@ -38,7 +38,9 @@ ficheros**. → [[design-system]]
 
 - `TrendChart` y `WeeklyChart` usan `theme.income` (verde) y `theme.expense` (rojo) — reservados a
   ingreso/gasto— y `theme.text` para la línea de ahorro.
-- `ExpenseChart` usa `theme.ramp[i % ramp.length]`: la rampa de 6 grises. El `stroke: theme.surface`
-  separa los segmentos entre sí.
+- `ExpenseChart` usa `theme.ramp[i % ramp.length]`: la rampa de 6 tonos atenuados (azul, naranja, cian,
+  violeta, rosa, mostaza — sin verde ni rojo). El `stroke: theme.surface` separa los segmentos entre
+  sí; el `<Legend>` y el `<Tooltip>` con el nombre de cada categoría son el canal de apoyo para los
+  tonos que no llegan a 3:1 de contraste sobre blanco. → [[design-system]]
 
 Related: [[design-system]] · [[calculations]] · [[ui-app]]

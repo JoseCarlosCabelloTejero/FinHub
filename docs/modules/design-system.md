@@ -43,11 +43,16 @@ bueno.
 
 - **Verde = ingreso, rojo = gasto. Nada más.** Un estado de error del sync no se pinta de rojo: usa un
   tono más oscuro de la escala de grises (`needsAttention()` en `syncCopy.ts`).
-- Todo lo demás es la escala de grises.
-- **La rampa del donut** (`theme.ramp`) tiene 6 escalones bien separados, del mayor al menor gasto: en
-  monocromo, más de 6 deja de ser distinguible. De ahí que
-  `CATEGORY_LIMIT = theme.ramp.length` y que `topCategories()` agrupe la cola en "Otros". **Si añades
-  colores a la rampa, el límite se ajusta solo.** → [[calculations]]
+- Fuera de ingreso/gasto, el resto de la UI es la escala de grises. **Excepción única: la rampa del
+  donut de categorías** (siguiente punto), que es la única superficie con color categórico —
+  precisamente para no competir con el verde/rojo semántico en ningún otro sitio.
+- **La rampa del donut** (`theme.ramp`) tiene 6 tonos atenuados de familias de color distintas (azul,
+  naranja, cian, violeta, rosa, mostaza — ninguno verde ni rojo, para no chocar con
+  ingreso/gasto), en un orden fijo que valida separación CVD par a par (incluido el par que cierra el
+  círculo, último ↔ primero). No son grises: más allá de 6 tonos deja de ser distinguible con
+  garantías, de ahí que `CATEGORY_LIMIT = theme.ramp.length` y que `topCategories()` agrupe la cola en
+  "Otros". **Si añades colores a la rampa, el límite se ajusta solo — pero hay que re-validar el
+  nuevo orden (separación CVD, contraste) antes de fijarlo.** → [[calculations]]
 - El color y el icono son **siempre redundancia**: el texto ya lleva el significado completo (regla que
   se ve explícita en `syncCopy.ts`).
 

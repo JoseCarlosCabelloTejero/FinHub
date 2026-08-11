@@ -8,9 +8,10 @@ export const theme = {
   muted: '#737373',
   income: '#16794f',
   expense: '#b3261e',
-  // Rampa del donut, del mayor al menor gasto. 6 escalones bien separados:
-  // en monocromo, más de 6 deja de ser distinguible — de ahí el corte con "Otros".
-  ramp: ['#171717', '#404040', '#666666', '#8c8c8c', '#b3b3b3', '#d9d9d9'],
+  // Rampa del donut. 6 tonos atenuados de familias de color distintas (no grises): el
+  // orden es fijo y valida separación CVD par a par, incluido el par que cierra el
+  // círculo (último ↔ primero) — no reordenar sueltamente.
+  ramp: ['#5f8fd0', '#d9824f', '#1f9dae', '#7a68c9', '#d1688f', '#d1a23e'],
 } as const;
 
 export const CATEGORY_LIMIT = theme.ramp.length;
