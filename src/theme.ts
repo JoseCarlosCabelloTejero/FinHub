@@ -15,3 +15,19 @@ export const theme = {
 } as const;
 
 export const CATEGORY_LIMIT = theme.ramp.length;
+
+// Sentinel para la fila "Otros" que agrega la cola en topCategories(): no es una
+// categoría real, así que no compite por un tono de identidad (ver categoryColor).
+export const OTROS_ID = 'otros';
+
+// Color por identidad de categoría, no por posición en el ranking de gasto: mismo id,
+// mismo color siempre (en cualquier dispositivo, sin persistir nada), tanto para las
+// categorías por defecto (slug determinista) como para las creadas a mano (uuid).
+// Con más de 6 categorías activas a la vez es matemáticamente inevitable que dos
+// coincidan en color — la misma limitación que ya tenía la rampa de 6 tonos.
+export function categoryColor(categoryId: string): string {
+  if (categoryId === OTROS_ID) return theme.muted;
+  let hash = 5381;
+  for (let i = 0; i < categoryId.length; i++) hash = (hash * 33) ^ categoryId.charCodeAt(i);
+  return theme.ramp[Math.abs(hash) % theme.ramp.length];
+}

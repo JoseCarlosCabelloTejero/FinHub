@@ -53,6 +53,12 @@ bueno.
   garantías, de ahí que `CATEGORY_LIMIT = theme.ramp.length` y que `topCategories()` agrupe la cola en
   "Otros". **Si añades colores a la rampa, el límite se ajusta solo — pero hay que re-validar el
   nuevo orden (separación CVD, contraste) antes de fijarlo.** → [[calculations]]
+- **El color es por identidad de categoría, no por ranking de gasto.** `categoryColor(categoryId)`
+  (`theme.ts`) deriva el tono con un hash determinista del `id` de la categoría: la misma categoría
+  siempre sale con el mismo color, sea cual sea su puesto en el gasto del mes. `'Otros'` (agregado de
+  la cola, no una categoría real) usa el sentinel `OTROS_ID` y siempre lleva `theme.muted`, para no
+  competir por un tono de identidad. Con más de 6 categorías con gasto en el mismo periodo, dos pueden
+  coincidir en color — límite matemático de tener solo 6 tonos, no un bug.
 - El color y el icono son **siempre redundancia**: el texto ya lleva el significado completo (regla que
   se ve explícita en `syncCopy.ts`).
 

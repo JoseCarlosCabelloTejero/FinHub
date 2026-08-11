@@ -1,6 +1,6 @@
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { money } from './calculations';
-import { theme } from './theme';
+import { categoryColor, theme } from './theme';
 
 // Etiquetas del eje Y compactas ("1,8 mil €"): con 60px por defecto recharts se comía
 // casi el 20% del ancho en un móvil de 320px. De ahí el width fijo más estrecho.
@@ -17,10 +17,11 @@ const Box = ({children}:{children:React.ReactNode}) => <div className="chart-box
 export function TrendChart({data}:{data:{name:string;ingresos:number;gastos:number;ahorro:number}[]}) {
   return <Box><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><CartesianGrid stroke={theme.line} vertical={false}/><XAxis {...xAxis}/><YAxis {...yAxis}/><Tooltip {...tooltip}/><Legend {...legend}/><Line dataKey="ingresos" stroke={theme.income} strokeWidth={3} dot={false} activeDot={{r:4}}/><Line dataKey="gastos" stroke={theme.expense} strokeWidth={3} dot={false} activeDot={{r:4}}/><Line dataKey="ahorro" stroke={theme.text} strokeWidth={3} dot={false} activeDot={{r:4}}/></LineChart></ResponsiveContainer></Box>;
 }
-export function ExpenseChart({data}:{data:{name:string;value:number}[]}) {
+export function ExpenseChart({data}:{data:{categoryId:string;name:string;value:number}[]}) {
   // Radios en % y leyenda sin `height` fija: en px el donut no encogía y los 6 nombres de
   // categoría (CATEGORY_LIMIT) se salían de la caja de 36px al envolver en pantallas estrechas.
-  return <Box><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="80%" paddingAngle={3}>{data.map((_,i)=><Cell key={i} fill={theme.ramp[i%theme.ramp.length]} stroke={theme.surface} strokeWidth={2}/>)}</Pie><Tooltip {...tooltip}/><Legend verticalAlign="bottom" {...legend}/></PieChart></ResponsiveContainer></Box>;
+  // Color por categoryId (identidad), no por índice: mismo color siempre para la misma categoría.
+  return <Box><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="80%" paddingAngle={3}>{data.map((d)=><Cell key={d.categoryId} fill={categoryColor(d.categoryId)} stroke={theme.surface} strokeWidth={2}/>)}</Pie><Tooltip {...tooltip}/><Legend verticalAlign="bottom" {...legend}/></PieChart></ResponsiveContainer></Box>;
 }
 export function WeeklyChart({data}:{data:{name:string;ingresos:number;gastos:number}[]}) {
   return <Box><ResponsiveContainer width="100%" height="100%"><BarChart data={data}><CartesianGrid stroke={theme.line} vertical={false}/><XAxis {...xAxis}/><YAxis {...yAxis}/><Tooltip {...tooltip}/><Legend {...legend}/><Bar dataKey="ingresos" fill={theme.income} radius={[5,5,0,0]}/><Bar dataKey="gastos" fill={theme.expense} radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></Box>;

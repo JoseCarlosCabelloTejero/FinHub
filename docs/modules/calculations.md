@@ -50,12 +50,19 @@ Los porcentajes son sobre los **ingresos del mes** y valen `null` si no hay ingr
 
 ## `categoryData` y `topCategories`
 
-`categoryData` suma el gasto por categoría, descarta los ceros y ordena de mayor a menor.
-`topCategories(data, limit = 6)` recorta la cola agrupándola en **"Otros"**, y **conserva el total**.
+`categoryData` suma el gasto por categoría, descarta los ceros y ordena de mayor a menor. Cada fila es
+`{ categoryId, name, value }` — el `categoryId` viaja hasta el donut para poder colorear por identidad
+de categoría en vez de por posición en el ranking (ver más abajo). `topCategories(data, limit = 6)`
+recorta la cola agrupándola en **"Otros"**, y **conserva el total**; la fila `'Otros'` no es una
+categoría real, así que lleva el `categoryId` sentinel `OTROS_ID` (`theme.ts`) en vez del de una
+categoría.
 
-El límite no es arbitrario: la rampa de grises del donut solo distingue bien 6 escalones, y por eso
-[[ui-app]] pasa `CATEGORY_LIMIT = theme.ramp.length`. Si añades colores a la rampa, el límite se ajusta
-solo. → [[design-system]]
+El límite no es arbitrario: la rampa del donut solo distingue bien 6 tonos, y por eso [[ui-app]] pasa
+`CATEGORY_LIMIT = theme.ramp.length`. Si añades colores a la rampa, el límite se ajusta solo.
+`categoryColor(categoryId)` (`theme.ts`) deriva el color con un hash determinista del id: misma
+categoría, mismo color siempre, sin importar su puesto en el gasto del mes. Con más de 6 categorías con
+gasto en el mismo periodo, dos pueden coincidir en color — límite matemático de 6 tonos para más
+categorías, no un bug. → [[design-system]]
 
 ## Al añadir lógica aquí
 
