@@ -16,7 +16,7 @@ npx vite preview     # el README menciona "npm run preview", pero ese script NO 
 Un solo fichero de test: `npx vitest run src/calculations.test.ts`
 Un solo caso por nombre: `npx vitest run -t 'agrupa la cola en "Otros"'`
 
-Requiere Node.js 20+. Comprobación completa antes de dar algo por terminado: `npm test && npm run lint && npm run build`.
+Requiere Node.js 22 (`.nvmrc`; con `nvm`: `nvm use`). Comprobación completa antes de dar algo por terminado: `npm test && npm run lint && npm run build`.
 
 ## Vault de documentación (`docs/`)
 

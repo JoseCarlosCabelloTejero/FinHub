@@ -65,11 +65,11 @@ Development** del proyecto de Vercel. → [[comandos-y-entorno]]
 
 1. Importar el repo desde *Add New → Project*. Plan Hobby: despliega repos privados de cuentas personales.
 2. Las dos variables de entorno en los tres entornos (arriba).
-3. Node.js Version: `package.json` declara `engines.node: ">=20"`, que **es lo que Vercel lee** — `.nvmrc`
-   solo lo usan el CI (verificado: `actions/setup-node` resuelve `20` → 20.20.2) y el entorno local. El
-   rango abierto es deliberado: Vercel construye con su versión por defecto, que puede ser mayor que 20, y
-   un build de Vite no es sensible a esa diferencia. Si en algún momento se quiere que CI y producción
-   corran exactamente lo mismo: `nvm install <v>`, `.nvmrc` → `<v>` y ajustar el "Node.js 20+" de los docs.
+3. Node.js Version: `package.json` declara `engines.node: "22.x"`, que **es lo que Vercel lee** — `.nvmrc`
+   solo lo usan el CI y el entorno local, y también está en `22`. Está **fijado a una major a propósito**:
+   con un rango abierto (`>=20`) Vercel avisa de que la versión *se actualizará sola* cuando saque un major
+   nuevo, y un build que cambia de Node sin que nadie toque nada es una fuente de sorpresas. Para subir de
+   major hay que tocar los tres sitios a la vez: `.nvmrc`, `engines` y el "Node.js 22" de los docs.
 
 ### Supabase
 

@@ -42,7 +42,7 @@ React + TypeScript + Vite · IndexedDB vía [`idb`](https://github.com/jakearchi
 
 ## Puesta en marcha
 
-Requiere Node.js 20+ y un proyecto de Supabase propio (aunque el dato aún no viaje allí, el login ya es obligatorio).
+Requiere Node.js 22 y un proyecto de Supabase propio (aunque el dato aún no viaje allí, el login ya es obligatorio).
 
 ```bash
 npm install
