@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowDownLeft, ArrowUpRight, BarChart3, CalendarRange, ChevronDown, ChevronUp, CirclePlus, LayoutDashboard, List, Pencil, Plus, Search, Settings2, Table2, Trash2, WalletCards, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, BarChart3, CalendarRange, ChevronDown, ChevronUp, CirclePlus, Landmark, LayoutDashboard, List, Pencil, Plus, Search, Settings2, Table2, Trash2, WalletCards, X } from 'lucide-react';
 import { addMonths, addYears, format, parseISO, subMonths, subYears } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { categoryData, filterPeriod, money, percent, summary, topCategories, trendData, weeklyBreakdown } from './calculations';
@@ -13,14 +13,16 @@ import { onAuthChange, resolveUserId, signOut } from './supabase';
 import { SyncChip, SyncNote } from './SyncStatus';
 import { needsAttention, syncCopy } from './syncCopy';
 import Login from './Login';
-import type { Category, Movement, MovementType, Preferences } from './types';
+import Patrimonio from './Patrimonio';
+import { Empty, Stat } from './Ui';
+import type { Account, Category, Closing, Movement, MovementType, Preferences } from './types';
 const TrendChart = lazy(() => import('./Charts').then(m=>({default:m.TrendChart})));
 const ExpenseChart = lazy(() => import('./Charts').then(m=>({default:m.ExpenseChart})));
 const WeeklyChart = lazy(() => import('./Charts').then(m=>({default:m.WeeklyChart})));
 
 // [id, icono, etiqueta del nav, título de la cabecera]. Fuente única: la usan el nav lateral,
 // el nav móvil y el <h1>, que antes repetían la misma lista tres veces.
-const pages = [['summary',LayoutDashboard,'Resumen','Resumen financiero'],['weekly',Table2,'Semanal','Desglose semanal'],['movements',List,'Movimientos','Movimientos'],['categories',Settings2,'Categorías','Categorías']] as const;
+const pages = [['summary',LayoutDashboard,'Resumen','Resumen financiero'],['weekly',Table2,'Semanal','Desglose semanal'],['movements',List,'Movimientos','Movimientos'],['patrimonio',Landmark,'Patrimonio','Patrimonio'],['categories',Settings2,'Categorías','Categorías']] as const;
 type Page = typeof pages[number][0];
 const today = format(new Date(),'yyyy-MM-dd');
 const blank = (): Omit<Movement,'id'|'createdAt'|'updatedAt'> => ({type:'expense',amount:0,date:today,categoryId:'',concept:'',notes:''});
@@ -41,8 +43,8 @@ export default function App() {
 }
 
 function Finances() {
-  const [page,setPage]=useState<Page>('summary'); const [movements,setMovements]=useState<Movement[]>([]); const [categories,setCategories]=useState<Category[]>([]); const [prefs,setPrefs]=useState<Preferences>({periodMode:'month',selectedDate:today}); const [loading,setLoading]=useState(true); const [notice,setNotice]=useState(''); const [modal,setModal]=useState(false); const [editing,setEditing]=useState<Movement|null>(null);
-  const reload=async()=>{const data=await getAllData();setMovements(data.movements);setCategories(data.categories.sort((a,b)=>a.order-b.order));};
+  const [page,setPage]=useState<Page>('summary'); const [movements,setMovements]=useState<Movement[]>([]); const [categories,setCategories]=useState<Category[]>([]); const [accounts,setAccounts]=useState<Account[]>([]); const [closings,setClosings]=useState<Closing[]>([]); const [prefs,setPrefs]=useState<Preferences>({periodMode:'month',selectedDate:today}); const [loading,setLoading]=useState(true); const [notice,setNotice]=useState(''); const [modal,setModal]=useState(false); const [editing,setEditing]=useState<Movement|null>(null);
+  const reload=async()=>{const data=await getAllData();setMovements(data.movements);setCategories(data.categories.sort((a,b)=>a.order-b.order));setAccounts(data.accounts.sort((a,b)=>a.order-b.order));setClosings(data.closings);};
   // El sync necesita poder recargar la pantalla cuando el pull trae algo, pero `reload` es una
   // función nueva en cada render: capturarla directamente congelaría la primera. El ref siempre
   // apunta a la vigente. `dead` cubre el doble montaje de StrictMode, que en desarrollo ejecutaría
@@ -72,10 +74,11 @@ function Finances() {
     <aside><div className="brand"><span><WalletCards/></span><div><b>FinHub</b><small>Finanzas personales</small></div></div><nav>{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><SyncNote state={sync} onSignOut={()=>{void signOut()}}/></aside>
     {/* El chip vive en la cabecera y no solo en el aside porque el aside desaparece por debajo de
         760px, que es justo el caso en el que saber si el móvil ha sincronizado importa más. */}
-    <main><header><div><span className="eyebrow">Tu dinero, con claridad</span><h1>{pages.find(p=>p[0]===page)![3]}</h1></div><div className="header-side"><SyncChip state={sync}/>{page!=='categories'&&<button className="primary" onClick={()=>openForm()}><Plus/>Nuevo movimiento</button>}</div></header>
+    <main><header><div><span className="eyebrow">Tu dinero, con claridad</span><h1>{pages.find(p=>p[0]===page)![3]}</h1></div><div className="header-side"><SyncChip state={sync}/>{page!=='categories'&&page!=='patrimonio'&&<button className="primary" onClick={()=>openForm()}><Plus/>Nuevo movimiento</button>}</div></header>
     {page==='summary'&&<Summary prefs={prefs} setPrefs={setPrefs} totals={totals} items={inPeriod} categories={categories}/>}
     {page==='weekly'&&<Weekly prefs={prefs} setPrefs={setPrefs} movements={movements} categories={categories}/>}
     {page==='movements'&&<Movements items={movements} categories={categories} onEdit={openForm} onDelete={deleteOne}/>}
+    {page==='patrimonio'&&<Patrimonio accounts={accounts} closings={closings} reload={reload} onNotice={flash}/>}
     {page==='categories'&&<Categories categories={categories} reload={reload} onNotice={flash}/>}
     </main><div className="mobile-nav">{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/><small>{label}</small></button>)}</div>
     {modal&&<MovementModal initial={editing} categories={categories} onClose={()=>setModal(false)} onSave={onSaved}/>}<div className="sr-live" aria-live="polite">{notice}</div>{notice&&<div className="toast">{notice}</div>}
@@ -97,8 +100,6 @@ function Summary({prefs,setPrefs,totals,items,categories}:{prefs:Preferences;set
   <section className="stats"><Stat label="Ingresos" value={totals.income} icon={<ArrowUpRight/>} tone="green"/><Stat label="Gastos" value={totals.expenses} icon={<ArrowDownLeft/>} tone="red"/><Stat label="Ahorro" value={totals.savings} icon={<WalletCards/>} tone={totals.savings>=0?'neutral':'red'}/><Stat label="Tasa de ahorro" text={`${totals.rate.toFixed(1)} %`} icon={<BarChart3/>} tone="neutral"/></section>
   {items.length===0?<Empty icon={<BarChart3/>} title="Todavía no hay datos en este periodo" text="Añade tu primer ingreso o gasto para empezar a ver la evolución de tus finanzas."/>:<Suspense fallback={<div className="chart-loading">Dibujando gráficos…</div>}><section className="charts"><article className="chart wide"><h2>Evolución del periodo</h2><p>Ingresos, gastos y ahorro</p><TrendChart data={trend}/></article><article className="chart"><h2>Gastos por categoría</h2><p>Dónde se va tu dinero</p><ExpenseChart data={cat}/></article><article className="chart"><h2>Comparación temporal</h2><p>{prefs.periodMode==='month'?'Vista semanal':'Vista mensual'}</p><WeeklyChart data={trend}/></article></section></Suspense>}</>;
 }
-function Stat({label,value,text,icon,tone}:{label:string;value?:number;text?:string;icon:React.ReactNode;tone:string}){return <article className={`stat ${tone}`}><div className="stat-icon">{icon}</div><span>{label}</span><strong>{text??money.format(value||0)}</strong></article>}
-function Empty({icon,title,text}:{icon:React.ReactNode;title:string;text:string}){return <div className="empty"><span>{icon}</span><h2>{title}</h2><p>{text}</p></div>}
 
 function Weekly({prefs,setPrefs,movements,categories}:{prefs:Preferences;setPrefs:(p:Preferences)=>void;movements:Movement[];categories:Category[]}){
   const [showEmpty,setShowEmpty]=useState(false);
