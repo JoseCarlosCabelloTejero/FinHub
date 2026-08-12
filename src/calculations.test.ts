@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { filterPeriod, summary, topCategories, weeklyBreakdown, weekOfMonth, weeksInMonth } from './calculations';
+import { available, closingId, filterPeriod, latestClosings, monthCompleteness, netWorth, parseAmount, previousMonth, shiftMonth, summary, topCategories, weeklyBreakdown, weekOfMonth, weeksInMonth } from './calculations';
 import { EPOCH_UPDATED_AT } from './data';
-import type { Category, Movement } from './types';
+import type { Account, Category, Closing, Movement } from './types';
 const movement=(type:'income'|'expense',amount:number,date='2026-04-10',categoryId='x',subcategoryId?:string):Movement=>({id:crypto.randomUUID(),type,amount,date,categoryId,subcategoryId,concept:'Test',createdAt:'',updatedAt:''});
 describe('cálculos financieros',()=>{it('calcula ingresos, gastos, ahorro y tasa',()=>{expect(summary([movement('income',2000),movement('expense',500)])).toEqual({income:2000,expenses:500,savings:1500,rate:75})});it('evita dividir entre cero',()=>expect(summary([movement('expense',20)]).rate).toBe(0));it('filtra por mes',()=>expect(filterPeriod([movement('income',1),movement('income',1,'2026-05-01')],'2026-04-01','month')).toHaveLength(1));it('filtra por año',()=>expect(filterPeriod([movement('income',1),movement('income',1,'2025-05-01')],'2026-04-01','year')).toHaveLength(1))});
 describe('topCategories',()=>{
@@ -41,4 +41,51 @@ describe('weeklyBreakdown',()=>{
   it('no inventa la fila "Sin subcategoría" si no hace falta',()=>expect(group(spread,'Fijos').rows.map(r=>r.name)).toEqual(['Piso','Luz']));
   it('respeta el orden de categorías y subcategorías',()=>expect(run([]).groups.map(g=>g.name)).toEqual(['Fijos','Ocio']));
   it('usa solo las semanas reales del mes',()=>expect(weeklyBreakdown([],categories,'2026-02-01').weeks).toEqual([1,2,3,4]));
+});
+
+describe('meses de los cierres',()=>{
+  it('retrocede un mes',()=>expect(previousMonth('2026-03')).toBe('2026-02'));
+  it('cruza el año hacia atrás',()=>expect(previousMonth('2026-01')).toBe('2025-12'));
+  it('cruza el año hacia delante',()=>expect(shiftMonth('2026-12',1)).toBe('2027-01'));
+  it('compone el id determinista del cierre',()=>expect(closingId('broker','2026-03')).toBe('broker:2026-03'));
+});
+
+describe('importes tecleados en el ritual',()=>{
+  // Number('') es 0, y ese cero acabaría en la serie histórica como un saldo real cada vez que te
+  // saltas una cuenta. Vacío significa "no revisado", que es información distinta de "tengo 0 €".
+  it('lee el campo vacío como "no revisado", no como cero',()=>{expect(parseAmount('')).toBeNull();expect(parseAmount('   ')).toBeNull()});
+  it('lee un cero tecleado a mano como cero de verdad',()=>expect(parseAmount('0')).toBe(0));
+  it('lee decimales',()=>expect(parseAmount('1.5')).toBe(1.5));
+  it('lee la basura como "no revisado"',()=>expect(parseAmount('abc')).toBeNull());
+});
+
+describe('patrimonio',()=>{
+  const account=(id:string,nature:'asset'|'liability'='asset',flags:Partial<Account>={}):Account=>({id,name:id,nature,isInvestment:false,isLiquid:false,archived:false,order:0,updatedAt:EPOCH_UPDATED_AT,...flags});
+  const closing=(accountId:string,month:string,balance:number|null,contributed?:number):Closing=>({id:closingId(accountId,month),accountId,month,balance,...(contributed===undefined?{}:{contributed}),updatedAt:EPOCH_UPDATED_AT});
+  // El ejemplo de la sección 6 del diseño del dominio, que es la prueba de que el modelo cuadra.
+  const corriente=account('corriente','asset',{isLiquid:true});
+  const broker=account('broker','asset',{isInvestment:true});
+  const hipoteca=account('hipoteca','liability');
+  const ejemplo=[corriente,broker,hipoteca];
+  const febrero=[closing('corriente','2026-02',10000),closing('broker','2026-02',5000),closing('hipoteca','2026-02',100000)];
+  const marzo=[closing('corriente','2026-03',9500),closing('broker','2026-03',6200,1000),closing('hipoteca','2026-03',99700,0)];
+
+  it('resta el pasivo aunque el saldo se teclee en positivo',()=>expect(netWorth([account('deuda','liability')],[closing('deuda','2026-03',300)])).toBe(-300));
+  it('calcula el patrimonio neto de febrero del ejemplo',()=>expect(netWorth(ejemplo,febrero)).toBe(-85000));
+  it('calcula el patrimonio neto de marzo del ejemplo',()=>expect(netWorth(ejemplo,marzo)).toBe(-84000));
+  it('ignora las cuentas sin cierre en vez de arrastrar el mes anterior',()=>expect(netWorth(ejemplo,[closing('corriente','2026-03',9500)])).toBe(9500));
+  it('ignora un cierre vaciado',()=>expect(netWorth(ejemplo,[closing('corriente','2026-03',9500),closing('broker','2026-03',null)])).toBe(9500));
+  it('ignora los cierres de cuentas que no le pasas',()=>expect(netWorth([corriente],marzo)).toBe(9500));
+
+  it('suma solo las cuentas líquidas en el disponible',()=>{const tarjeta=account('tarjeta','liability',{isLiquid:true});expect(available([corriente,broker,hipoteca,tarjeta],[...marzo,closing('tarjeta','2026-03',200)])).toBe(9300)});
+  it('resta la tarjeta, que es líquida y pasivo',()=>{const tarjeta=account('tarjeta','liability',{isLiquid:true});expect(available([corriente,tarjeta],[closing('corriente','2026-03',1000),closing('tarjeta','2026-03',200)])).toBe(800)});
+
+  it('se queda con el cierre más reciente de cada cuenta',()=>expect(latestClosings([...febrero,...marzo]).map(c=>c.month)).toEqual(['2026-03','2026-03','2026-03']));
+  it('ignora los cierres vaciados y cae al último con saldo',()=>expect(latestClosings([closing('corriente','2026-02',10000),closing('corriente','2026-03',null)])).toEqual([closing('corriente','2026-02',10000)]));
+  it('acota a los meses anteriores para la pista del ritual',()=>expect(latestClosings([...febrero,...marzo],'2026-03').map(c=>c.balance)).toEqual([10000,5000,100000]));
+  it('salta los meses sin revisar al buscar la pista',()=>expect(latestClosings([closing('corriente','2026-01',1000),closing('corriente','2026-02',null)],'2026-03')).toEqual([closing('corriente','2026-01',1000)]));
+
+  it('cuenta cuántas cuentas se han revisado ese mes',()=>expect(monthCompleteness(ejemplo,marzo,'2026-03')).toEqual({reviewed:3,total:3}));
+  it('no cuenta como revisada una cuenta vaciada',()=>expect(monthCompleteness(ejemplo,[closing('corriente','2026-03',9500),closing('broker','2026-03',null)],'2026-03')).toEqual({reviewed:1,total:3}));
+  it('no cuenta los cierres de otros meses',()=>expect(monthCompleteness(ejemplo,febrero,'2026-03')).toEqual({reviewed:0,total:3}));
 });

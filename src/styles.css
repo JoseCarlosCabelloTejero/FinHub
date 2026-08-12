@@ -731,6 +731,60 @@ td small { display: block; color: var(--muted); margin-top: 3px }
 .sub-list small { color: var(--muted); margin-right: 10px }
 .add-sub { display: flex; gap: 7px; align-items: center; color: var(--text) !important; margin-top: 7px }
 
+/* ========================== Patrimonio ========================== */
+
+/* Un control deshabilitado tiene que verse deshabilitado: la flecha › en el mes en curso y el botón de
+   guardar mientras sube el cierre. Solo el login tenía su propia regla. */
+.period-nav button:disabled, .form-actions .primary:disabled { opacity: .45; cursor: default }
+/* Frase de apoyo bajo un bloque: el mismo gris que las etiquetas, no un tono nuevo. */
+.hint { color: var(--muted); font-size: 13px; margin: 12px 0 16px }
+.hint b { color: var(--text-2) }
+
+/* El ritual mensual NO es una tabla: por debajo de 760px hay una regla que reconstruye las tablas de
+   `.table-wrap` como tarjetas, con áreas cableadas a las seis columnas de la tabla de movimientos.
+   Una lista de filas propias apila sola y deja meter inputs sin pelearse con esa rejilla. */
+.closing-list {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.closing-row {
+  display: grid;
+  /* Nombre | saldo | aportado | nota | vaciar. El hueco del aportado se mantiene en las cuentas que no
+     lo piden para que las columnas sigan alineadas de fila en fila. */
+  grid-template-columns: 1.1fr 130px 150px 1.4fr auto;
+  gap: 13px;
+  align-items: end;
+  padding: 14px 18px;
+}
+/* Divisor entre filas y no debajo de cada una: así no se suma al borde superior del pie. */
+.closing-row + .closing-row { border-top: 1px solid var(--line) }
+.closing-name { align-self: center; display: flex; flex-wrap: wrap; align-items: center; gap: 7px }
+.closing-row label, .field {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.closing-row .secondary { padding: 12px 14px }
+.closing-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 13px;
+  padding: 16px 18px;
+  background: var(--surface-2);
+  border-top: 2px solid var(--line-strong);
+}
+.closing-foot span { color: var(--muted); font-size: 12px; display: block }
+.closing-foot strong { font-size: 19px }
+.closing-foot small { color: var(--muted); font-size: 12px }
+/* Los botones del selector Activo/Pasivo heredarían los 12px de `.field`. */
+.field .segmented { font-size: 14px; justify-self: start }
+.checks { display: grid; gap: 7px; margin: 18px 0 }
+.checks small { color: var(--muted); font-size: 12px; margin-bottom: 7px }
+
 /* ========================== Zona peligrosa ========================== */
 
 .danger-zone {
@@ -811,6 +865,11 @@ td small { display: block; color: var(--muted); margin-top: 3px }
   /* En la vista Semanal, PeriodBar pinta un <span/> vacío para conservar el space-between.
      En columna ese hueco se ve, así que se retira. */
   .period-bar > span:empty { display: none }
+  /* El ritual apila: en móvil cada cuenta es un bloque con sus campos uno debajo de otro, y el hueco
+     que alinea la columna del aportado deja de tener sentido. */
+  .closing-row { grid-template-columns: 1fr; align-items: stretch }
+  .closing-gap { display: none }
+  .closing-foot { flex-direction: column; align-items: flex-start; gap: 7px }
   /* La tabla cruzada no se reflowea: partirla en tarjetas destruye el cruce categoría × semana.
      Scroll horizontal con la primera columna fija, que es justo para lo que está el sticky. */
   .weekly-table { max-height: none }

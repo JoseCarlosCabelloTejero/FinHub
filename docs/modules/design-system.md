@@ -59,6 +59,11 @@ bueno.
   la cola, no una categoría real) usa el sentinel `OTROS_ID` y siempre lleva `theme.muted`, para no
   competir por un tono de identidad. Con más de 6 categorías con gasto en el mismo periodo, dos pueden
   coincidir en color — límite matemático de tener solo 6 tonos, no un bug.
+- **Las cifras de nivel van en gris.** El patrimonio neto, el disponible y los saldos por cuenta usan
+  `tone="neutral"` aunque el neto sea negativo: un pasivo no es un gasto, y pintarlo de rojo rompería la
+  regla. Es aplicar la regla vigente a una superficie nueva, no una excepción → [[patrimonio]]. La
+  variación (Δ) sí es un flujo y pedirá **extender** el enunciado, pero eso llega con el gráfico de
+  evolución, no antes.
 - El color y el icono son **siempre redundancia**: el texto ya lleva el significado completo (regla que
   se ve explícita en `syncCopy.ts`).
 

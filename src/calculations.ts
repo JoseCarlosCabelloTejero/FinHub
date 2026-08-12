@@ -1,6 +1,6 @@
-import { endOfMonth, endOfYear, format, getDaysInMonth, isWithinInterval, parseISO, startOfMonth, startOfYear } from 'date-fns';
+import { addMonths, endOfMonth, endOfYear, format, getDaysInMonth, isWithinInterval, parseISO, startOfMonth, startOfYear } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Category, Movement } from './types';
+import type { Account, Category, Closing, Movement } from './types';
 import { OTROS_ID } from './theme';
 
 export const money = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
@@ -55,4 +55,54 @@ export function topCategories(data: {categoryId: string; name: string; value: nu
   const head = data.slice(0, limit - 1);
   const rest = data.slice(limit - 1).reduce((n, x) => n + x.value, 0);
   return [...head, { categoryId: OTROS_ID, name: 'Otros', value: rest }];
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Patrimonio. Un cierre vive en un MES ('YYYY-MM'), no en una fecha: nada de aquí pasa por
+// `filterPeriod` ni por `periodBounds`, que trabajan con días. De ahí estos helpers de mes propios.
+// ---------------------------------------------------------------------------------------------------
+export const currentMonth = () => format(new Date(), 'yyyy-MM');
+/** Mueve un mes `delta` posiciones. Vía date-fns para que el salto de año salga gratis (2026-01 → 2025-12). */
+export const shiftMonth = (month: string, delta: number) => format(addMonths(parseISO(`${month}-01`), delta), 'yyyy-MM');
+export const previousMonth = (month: string) => shiftMonth(month, -1);
+export const monthLabel = (month: string) => format(parseISO(`${month}-01`), 'MMMM yyyy', { locale: es });
+/** El id del cierre es determinista a propósito: dos dispositivos que cierren la misma cuenta el mismo
+ *  mes convergen a la misma fila y el LWW por fila resuelve el conflicto. Nunca se compone a mano. */
+export const closingId = (accountId: string, month: string) => `${accountId}:${month}`;
+/** El signo con el que una cuenta entra en el patrimonio. Lo pone la naturaleza, nunca quien teclea:
+ *  el saldo siempre es positivo. Así un pasivo tecleado en negativo es imposible por diseño. */
+const sign = (account: Account) => (account.nature === 'liability' ? -1 : 1);
+/** Un cierre por cuenta: el del mes más alto **con saldo**, porque `balance: null` es "no revisado" y no
+ *  puede ganarle a un mes anterior que sí se revisó. Con `before` se acota a meses estrictamente
+ *  anteriores, que es lo que necesita la pista en gris del ritual. Entre cierres se muestra el último. */
+export function latestClosings(closings: Closing[], before?: string): Closing[] {
+  const best = new Map<string, Closing>();
+  for (const closing of closings) {
+    if (closing.balance === null || (before && closing.month >= before)) continue;
+    const current = best.get(closing.accountId);
+    if (!current || closing.month > current.month) best.set(closing.accountId, closing);
+  }
+  return [...best.values()];
+}
+const sumBalances = (accounts: Account[], closings: Closing[]) => accounts.reduce((total, account) => {
+  const balance = closings.find((closing) => closing.accountId === account.id)?.balance;
+  return total + (balance == null ? 0 : balance * sign(account));
+}, 0);
+/** Σ activos − Σ pasivos. Solo entran las cuentas que le pases (el nivel actual las quiere sin archivar)
+ *  y solo las que tengan cierre en `closings`: una cuenta sin revisar suma 0, no arrastra el mes pasado. */
+export const netWorth = (accounts: Account[], closings: Closing[]) => sumBalances(accounts, closings);
+/** El "disponible mañana". `isLiquid` hace dos trabajos con un solo interruptor: suma la corriente y
+ *  resta la tarjeta (es líquida y pasivo), ignorando el broker y la hipoteca. */
+export const available = (accounts: Account[], closings: Closing[]) => sumBalances(accounts.filter((account) => account.isLiquid), closings);
+/** Cuántas cuentas tienen saldo ese mes. Un mes incompleto se pinta como incompleto, no se completa con
+ *  lo del mes anterior. */
+export function monthCompleteness(accounts: Account[], closings: Closing[], month: string) {
+  const reviewed = accounts.filter((account) => closings.some((closing) => closing.accountId === account.id && closing.month === month && closing.balance !== null)).length;
+  return { reviewed, total: accounts.length };
+}
+/** Lee un campo de importe del ritual. Vacío (o basura) es `null` = "no revisado", **nunca 0**:
+ *  `Number('') === 0` metería un cero real en la serie histórica cada vez que te saltas una cuenta. */
+export function parseAmount(raw: string): number | null {
+  const value = Number(raw);
+  return raw.trim() === '' || !Number.isFinite(value) ? null : value;
 }
