@@ -5,7 +5,7 @@ up: "[[00-index]]"
 
 # Referencia: stores de IndexedDB
 
-Base **`finhub-finanzas`**, versión **3**. Nombre anterior (marca "Cielo"): `cielo-finanzas`, del que se
+Base **`finhub-finanzas`**, versión **4**. Nombre anterior (marca "Cielo"): `cielo-finanzas`, del que se
 copia una sola vez → [[migraciones-idb]].
 
 **Fuente de verdad**: `interface FinanceDB` en `src/db.ts`
@@ -19,6 +19,15 @@ copia una sola vez → [[migraciones-idb]].
 | `preferences` | `'main'` | out-of-line | `Preferences` | — |
 | `outbox` | `seq` | out-of-line **autoincremental** | `OutboxOp` | — |
 | `meta` | `'sync'` | out-of-line | `SyncMeta` | — |
+| `accounts` | `id` | in-line (`keyPath`) | `Account` | — |
+| `closings` | `id` | in-line (`keyPath`) | `Closing` | — |
+
+### `accounts` y `closings` (v4, dominio patrimonio)
+
+Sin índices: son 3-8 cuentas y sus cierres, todo se filtra en memoria como el resto. La clave de un
+cierre es su **id determinista `${accountId}:${month}`**, que es también el grano del LWW
+→ [[009-la-foto-manda-cierre-mensual]]. Nacen vacíos: **no hay semillas de patrimonio**, a diferencia
+de las categorías. → [[patrimonio]]
 
 ### `movements`
 
@@ -58,11 +67,11 @@ indetectable y mezclaría dos históricos. → [[login]]
 
 ## Qué vacía qué
 
-| Operación | `movements` | `categories` | `preferences` | `outbox` | `meta` |
-|---|---|---|---|---|---|
-| `clearAllData()` | ✅ vacía | ✅ vacía y **resiembra** | ✅ vacía | ✅ vacía | ✅ vacía |
-| `replaceLocalData()` | ✅ sustituye | ✅ sustituye | — | lee (bloquea) | — |
-| `clearOutbox()` | — | — | — | ✅ vacía | — |
+| Operación | `movements` | `categories` | `preferences` | `outbox` | `meta` | `accounts` | `closings` |
+|---|---|---|---|---|---|---|---|
+| `clearAllData()` | ✅ vacía | ✅ vacía y **resiembra** | ✅ vacía | ✅ vacía | ✅ vacía | ✅ vacía (sin resiembra) | ✅ vacía (sin resiembra) |
+| `replaceLocalData()` | ✅ sustituye | ✅ sustituye | — | lee (bloquea) | — | ✅ sustituye | ✅ sustituye |
+| `clearOutbox()` | — | — | — | ✅ vacía | — | — | — |
 
 `clearAllData()` vacía también `outbox` y `meta` porque dejar ops encoladas tras un "Borrar todo"
 repoblaría el servidor recién vaciado. → [[borrado-total]]

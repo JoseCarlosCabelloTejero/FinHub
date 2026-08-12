@@ -1,6 +1,6 @@
 import { openDB, type DBSchema } from 'idb';
 import { defaultCategories, EPOCH_UPDATED_AT } from './data';
-import type { Category, Movement, OutboxOp, Preferences, SyncMeta } from './types';
+import type { Account, Category, Closing, Movement, OutboxOp, Preferences, SyncMeta } from './types';
 
 interface FinanceDB extends DBSchema {
   movements: { key: string; value: Movement; indexes: { date: string; type: string } };
@@ -10,6 +10,9 @@ interface FinanceDB extends DBSchema {
   // claves es el orden causal de las escrituras, que es lo que el push tiene que respetar.
   outbox: { key: number; value: OutboxOp };
   meta: { key: string; value: SyncMeta };
+  // Sin índices: son 3-8 cuentas y sus cierres, todo se filtra en memoria como el resto.
+  accounts: { key: string; value: Account };
+  closings: { key: string; value: Closing };
 }
 
 // Cómo se veían las categorías antes de la v3. Solo existe para tipar el backfill: es un artefacto
@@ -31,7 +34,7 @@ const META_KEY = 'sync';
 // es la única situación en la que tiene sentido buscar datos bajo el nombre antiguo.
 let isFreshDb = false;
 
-export const dbPromise = openDB<FinanceDB>(DB_NAME, 3, {
+export const dbPromise = openDB<FinanceDB>(DB_NAME, 4, {
   async upgrade(db, oldVersion, _newVersion, tx) {
     if (oldVersion === 0) isFreshDb = true;
     if (oldVersion < 1) {
@@ -50,6 +53,11 @@ export const dbPromise = openDB<FinanceDB>(DB_NAME, 3, {
       const categories = tx.objectStore('categories');
       const rows = (await categories.getAll()) as unknown as LegacyCategory[];
       for (const category of rows) categories.put({ ...category, updatedAt: category.updatedAt ?? EPOCH_UPDATED_AT, subcategories: category.subcategories.map((sub) => ({ ...sub, updatedAt: sub.updatedAt ?? EPOCH_UPDATED_AT })) } as Category);
+    }
+    if (oldVersion < 4) {
+      // Dominio patrimonio. Sin backfill: los stores nacen vacíos y no hay semillas.
+      db.createObjectStore('accounts', { keyPath: 'id' });
+      db.createObjectStore('closings', { keyPath: 'id' });
     }
   },
 }).then(async (db) => { if (isFreshDb) await migrateFromLegacyDb(db); return db; });
@@ -86,16 +94,18 @@ export async function bootstrapData() {
     await Promise.all([...defaultCategories.map((category) => tx.store.put(category)), tx.done]);
   }
 }
-export async function getAllData() { const db = await dbPromise; return { movements: await db.getAll('movements'), categories: await db.getAll('categories') }; }
+export async function getAllData() { const db = await dbPromise; return { movements: await db.getAll('movements'), categories: await db.getAll('categories'), accounts: await db.getAll('accounts'), closings: await db.getAll('closings') }; }
 export async function saveMovement(movement: Movement) { return (await dbPromise).put('movements', movement); }
 export async function removeMovement(id: string) { return (await dbPromise).delete('movements', id); }
 export async function saveCategory(category: Category) { return (await dbPromise).put('categories', category); }
 export async function getCategory(id: string) { return (await dbPromise).get('categories', id); }
+export async function saveAccount(account: Account) { return (await dbPromise).put('accounts', account); }
+export async function saveClosing(closing: Closing) { return (await dbPromise).put('closings', closing); }
 export async function savePreferences(value: Preferences) { return (await dbPromise).put('preferences', value, 'main'); }
 export async function loadPreferences() { return (await dbPromise).get('preferences', 'main'); }
 // Vacía también outbox y meta: dejar ops encoladas tras un "Borrar todo" repoblaría el servidor
 // recién vaciado. meta es bookkeeping reconstruible (el epoch se relee, la migración es idempotente).
-export async function clearAllData() { const db = await dbPromise; const tx = db.transaction(['movements','categories','preferences','outbox','meta'], 'readwrite'); await Promise.all([tx.objectStore('movements').clear(),tx.objectStore('categories').clear(),tx.objectStore('preferences').clear(),tx.objectStore('outbox').clear(),tx.objectStore('meta').clear(),tx.done]); await bootstrapData(); }
+export async function clearAllData() { const db = await dbPromise; const tx = db.transaction(['movements','categories','preferences','outbox','meta','accounts','closings'], 'readwrite'); await Promise.all([tx.objectStore('movements').clear(),tx.objectStore('categories').clear(),tx.objectStore('preferences').clear(),tx.objectStore('outbox').clear(),tx.objectStore('meta').clear(),tx.objectStore('accounts').clear(),tx.objectStore('closings').clear(),tx.done]); await bootstrapData(); }
 
 // Aplica un snapshot del servidor sobre la caché local. `compute` recibe las ops que aún estaban sin
 // subir y devuelve el estado final; la mezcla vive en sync.ts, aquí solo la atomicidad.
@@ -103,13 +113,16 @@ export async function clearAllData() { const db = await dbPromise; const tx = db
 // cualquier encolado concurrente hasta que esto termina, y así ninguna escritura del usuario cae en
 // la ventana entre "leo lo pendiente" y "reemplazo la caché". compute es síncrona a propósito: un
 // await de algo ajeno a la base cerraría la transacción antes de tiempo.
-export async function replaceLocalData(compute: (pending: OutboxOp[]) => { movements: Movement[]; categories: Category[] }) {
-  const tx = (await dbPromise).transaction(['movements', 'categories', 'outbox'], 'readwrite');
+export async function replaceLocalData(compute: (pending: OutboxOp[]) => { movements: Movement[]; categories: Category[]; accounts: Account[]; closings: Closing[] }) {
+  const tx = (await dbPromise).transaction(['movements', 'categories', 'accounts', 'closings', 'outbox'], 'readwrite');
   const next = compute(await tx.objectStore('outbox').getAll());
   await Promise.all([
     tx.objectStore('movements').clear(), tx.objectStore('categories').clear(),
+    tx.objectStore('accounts').clear(), tx.objectStore('closings').clear(),
     ...next.movements.map((movement) => tx.objectStore('movements').put(movement)),
     ...next.categories.map((category) => tx.objectStore('categories').put(category)),
+    ...next.accounts.map((account) => tx.objectStore('accounts').put(account)),
+    ...next.closings.map((closing) => tx.objectStore('closings').put(closing)),
     tx.done,
   ]);
 }

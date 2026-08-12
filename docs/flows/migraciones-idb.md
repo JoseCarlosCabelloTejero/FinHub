@@ -5,7 +5,7 @@ up: "[[00-index]]"
 
 # Flujo: migraciones de IndexedDB
 
-La base local es `finhub-finanzas`, **versión 3**. Esta nota explica cómo se llegó ahí y, sobre todo,
+La base local es `finhub-finanzas`, **versión 4**. Esta nota explica cómo se llegó ahí y, sobre todo,
 **la regla para la próxima migración**.
 
 **Fuente de verdad**: `dbPromise` y `migrateFromLegacyDb` en `src/db.ts` · tests `src/db.migration.test.ts` y `src/db.rename-migration.test.ts`
@@ -16,7 +16,7 @@ Un cambio de esquema exige **subir la versión** *y* **añadir su propio bloque 
 `oldVersion`**, sin tocar los anteriores:
 
 ```ts
-if (oldVersion < 4) { /* solo lo nuevo de la v4 */ }
+if (oldVersion < 5) { /* solo lo nuevo de la v5 */ }
 ```
 
 Los bloques anteriores se quedan como están: un navegador que venga de la v1 los ejecuta en cadena.
@@ -32,6 +32,7 @@ la necesita, porque `getSyncMeta()` mergea con los defaults y un registro viejo 
 flowchart LR
     V0["v0<br/>(base nueva)"] -->|"oldVersion < 1"| V1["v1<br/>movements + índices<br/>categories · preferences"]
     V1 -->|"oldVersion < 3"| V3["v3<br/>+ outbox · + meta<br/>backfill de updatedAt"]
+    V3 -->|"oldVersion < 4"| V4["v4<br/>+ accounts · + closings"]
     V0 -.->|isFreshDb| Legacy["copia desde<br/>'cielo-finanzas'"]
 ```
 
@@ -40,6 +41,11 @@ flowchart LR
 - **v3** — añade los stores `outbox` y `meta` (los dos out-of-line) y **rellena `updatedAt`** en las
   categorías y subcategorías que ya existieran, con `EPOCH_UPDATED_AT`. Sin ese backfill, una categoría
   sin sello no podría entrar en el LWW. → [[categorias]]
+- **v4** — añade `accounts` y `closings` (dominio patrimonio). Sin backfill: nacen vacíos y no hay
+  semillas. → [[patrimonio]] · [[009-la-foto-manda-cierre-mensual]]
+
+La copia legacy no cambia con la v4: `cielo-finanzas` es anterior al dominio patrimonio, así que sus
+"cinco stores" siguen siendo los cinco de siempre — no hay nada de cuentas que copiar.
 
 ### El detalle que rompe transacciones
 
@@ -96,8 +102,11 @@ El código puede retirarse cuando se dé por seguro que ningún navegador conser
 
 ## Tests
 
-- `db.migration.test.ts` — crea una base v2 a mano, abre la v3 y comprueba que se crean `outbox`/`meta`,
-  que se rellena `updatedAt` y que **los movimientos no se tocan**.
+- `db.migration.test.ts` — crea una base v2 a mano, abre la versión actual y comprueba que la cadena
+  entera de bloques funciona: se crean `outbox`/`meta` (y `accounts`/`closings`), se rellena `updatedAt`
+  y **los movimientos no se tocan**.
+- `db.migration.v4.test.ts` — crea una base v3 a mano y comprueba que la v4 crea `accounts`/`closings`
+  vacíos sin tocar datos ni cola.
 - `db.rename-migration.test.ts` — siembra `cielo-finanzas` y comprueba que los datos aparecen en
   `finhub-finanzas`.
 

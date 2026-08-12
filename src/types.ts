@@ -36,12 +36,51 @@ export interface Movement {
 
 export interface Preferences { periodMode: 'month' | 'year'; selectedDate: string }
 
+// El signo con el que la cuenta entra en el patrimonio. Nunca lo teclea la persona junto al importe:
+// el saldo de un cierre es siempre positivo y un pasivo resta al agregarse (mismo invariante que
+// Movement, donde el signo lo da el tipo).
+export type AccountNature = 'asset' | 'liability';
+
+// Un contenedor de dinero. Se archiva, nunca se borra: los cierres históricos lo referencian (mismo
+// patrón y misma razón que las categorías).
+export interface Account {
+  id: string;
+  name: string;
+  nature: AccountNature;
+  // Si su valor puede moverse sin que entre dinero (broker sí, ahorro no). Solo a estas cuentas se
+  // les pregunta el aportado en el cierre.
+  isInvestment: boolean;
+  // Si cuenta para el "disponible mañana". Aplica a activos y pasivos: la corriente suma, la tarjeta
+  // resta, el broker y la hipoteca se ignoran.
+  isLiquid: boolean;
+  archived: boolean;
+  order: number;
+  updatedAt: string;
+}
+
+// El valor de UNA cuenta en UN mes ("cierre"; "snapshot" ya significa el estado completo del
+// servidor). El id es determinista —`${accountId}:${month}`— para que dos dispositivos que cierren la
+// misma cuenta el mismo mes converjan a la misma fila y el LWW resuelva solo.
+export interface Closing {
+  id: string;
+  accountId: string;
+  month: string; // 'YYYY-MM'; los cierres no pasan por el filtrado de periodo
+  // null no es ausencia, es un estado real: "mes no revisado". Un cierre se edita o se vacía, nunca
+  // se borra, y por eso este dominio no necesita lápidas.
+  balance: number | null;
+  // Dinero propio que entró ese mes. En una cuenta de inversión separa ahorro de rentabilidad; en un
+  // pasivo significa "principal amortizado". Puede ser negativo (una retirada).
+  contributed?: number;
+  note?: string;
+  updatedAt: string;
+}
+
 // Una escritura pendiente de subir. Su `seq` es la clave autoincremental del store `outbox`, no un
 // campo del valor: el orden de las claves ES el orden causal en que se hicieron las escrituras.
 // `payload` va ya mapeado al esquema del servidor (snake_case) porque diffCategoryDoc produce filas,
 // no documentos; db.ts no necesita conocer ese formato, lo estrecha sync.ts en la fase 4.
 export interface OutboxOp {
-  table: 'movements' | 'categories' | 'subcategories';
+  table: 'movements' | 'categories' | 'subcategories' | 'accounts' | 'account_closings';
   kind: 'upsert' | 'delete';
   id: string;
   payload?: Record<string, unknown>;

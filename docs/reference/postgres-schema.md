@@ -5,8 +5,9 @@ up: "[[00-index]]"
 
 # Referencia: esquema de Postgres
 
-**Fuente de verdad**: `supabase/migrations/20260808133140_schema.sql` (531 líneas, muy comentadas — esta
-nota es el mapa, no un sustituto).
+**Fuente de verdad**: `supabase/migrations/20260808133140_schema.sql` (el esquema base, 531 líneas muy
+comentadas) y `supabase/migrations/20260812173707_patrimonio.sql` (cuentas y cierres). Esta nota es el
+mapa, no un sustituto.
 
 ## Premisas que atraviesan todo el esquema
 
@@ -30,9 +31,13 @@ erDiagram
     categories ||--o{ subcategories : "FK (user_id, category_id)"
     categories ||--o{ movements : "FK (user_id, category_id)"
     subcategories |o--o{ movements : "FK (user_id, subcategory_id)"
+    accounts ||--o{ account_closings : "FK (user_id, account_id)"
+    accounts |o--o{ movements : "FK (user_id, account_id)"
     categories { uuid user_id text id text name text type int order bool archived text updated_at }
     subcategories { uuid user_id text id text category_id text name int order bool archived text updated_at }
-    movements { uuid user_id text id text type numeric amount text date text category_id text subcategory_id text concept text notes text created_at text updated_at }
+    movements { uuid user_id text id text type numeric amount text date text category_id text subcategory_id text account_id text concept text notes text created_at text updated_at }
+    accounts { uuid user_id text id text name text nature bool is_investment bool is_liquid bool archived int order text updated_at }
+    account_closings { uuid user_id text id text account_id text month numeric balance numeric contributed text note text updated_at }
     movement_tombstones { uuid user_id text id text deleted_at }
     sync_meta { uuid user_id bigint wipe_epoch text updated_at }
 ```
@@ -43,7 +48,9 @@ erDiagram
 |---|---|
 | `categories` | `check type in ('income','expense')` · `"order"` entrecomillado (palabra reservada) |
 | `subcategories` | Normalizadas aquí, embebidas en el cliente → [[007-subcategorias-normalizadas-en-servidor]] |
-| `movements` | `numeric(12,2)`, `check amount >= 0`, checks de formato ISO en `date`/`created_at`/`updated_at` |
+| `movements` | `numeric(12,2)`, `check amount >= 0`, checks de formato ISO en `date`/`created_at`/`updated_at` · `account_id` nullable (fase 4 de [[patrimonio]]; la columna nace con el esquema para no re-migrar) |
+| `accounts` | `check nature in ('asset','liability')` · se archivan, nunca se borran (sin DELETE) |
+| `account_closings` | Grano `(cuenta, mes)` con **id determinista** `account_id:month`, blindado con `check (id = account_id \|\| ':' \|\| month)` · `balance` nullable (`null` = "no revisado") y `>= 0` cuando no lo es · `contributed` **sin check de signo** (una retirada es un aportado negativo) → [[009-la-foto-manda-cierre-mensual]] |
 
 Detalles de las FK de `movements` que costaron un rato:
 
@@ -57,6 +64,9 @@ Detalles de las FK de `movements` que costaron un rato:
   Además conserva el movimiento, en línea con "archivar preserva el histórico".
 - **`check (subcategory_id is null or subcategory_id <> '')`**: sin él, un `''` que se cuele produce un
   `23503` desconcertante. El cliente mapea `''` → `null`. → [[sync]]
+
+La FK `movements_account_fkey` (→ `accounts`) replica el patrón completo de la de subcategoría:
+`MATCH SIMPLE`, `on delete set null (account_id)` y el check del `''`.
 
 ### Server-only
 
@@ -74,11 +84,12 @@ Detalles de las FK de `movements` que costaron un rato:
   memoria. Añadirlo sería coste de escritura sin lector. *(Si algún día se hace pull incremental,
   entonces sí: `movements (user_id, updated_at)`.)*
 - **Sí** están los del lado hijo de cada FK (`subcategories_category_idx`, `movements_category_idx`,
-  `movements_subcategory_idx`): sin ellos, cada `CASCADE`/`SET NULL` haría un seq scan por fila padre.
+  `movements_subcategory_idx`, `account_closings_account_idx`, `movements_account_idx`): sin ellos, cada
+  `CASCADE`/`SET NULL` haría un seq scan por fila padre.
 
 ## Los tres triggers
 
-### 1. LWW — `discard_stale_write()` (BEFORE UPDATE, las 3 tablas)
+### 1. LWW — `discard_stale_write()` (BEFORE UPDATE, las 5 tablas de datos)
 
 ```sql
 if (new.updated_at collate "C") <= old.updated_at then return null;
@@ -89,8 +100,13 @@ if (new.updated_at collate "C") <= old.updated_at then return null;
   triggers AFTER disparados) — todo ruido con cero valor.
 - **`<=` y no `<`**: el empate se descarta, y eso es justo lo que hace idempotente el reintento del
   outbox tras un fallo de red.
-- Una sola función genérica para las tres tablas (`NEW` se resuelve en tiempo de ejecución).
-  Contrapartida: colgarla de una tabla sin `updated_at` compila bien y **peta al disparar**.
+- Una sola función genérica para todas las tablas de datos, incluidas `accounts` y `account_closings`
+  (`NEW` se resuelve en tiempo de ejecución). Contrapartida: colgarla de una tabla sin `updated_at`
+  compila bien y **peta al disparar**.
+
+Las tablas de patrimonio **no tienen** trigger de lápidas ni anti-resurrección: el cliente nunca emite
+`DELETE` sobre ellas (las cuentas se archivan, los cierres se vacían), así que no hay borrado que
+proteger. → [[009-la-foto-manda-cierre-mensual]]
 
 ### 2. Anti-resurrección — `block_resurrected_movement()` (BEFORE INSERT en `movements`)
 
@@ -129,11 +145,14 @@ sostiene el modelo: sin ella, un payload con `user_id` ajeno se colaría pese al
 | `categories` | select · insert · update | select, insert, update |
 | `subcategories` | select · insert · update | select, insert, update |
 | `movements` | select · insert · update · **delete** | select, insert, update, delete |
+| `accounts` | select · insert · update | select, insert, update |
+| `account_closings` | select · insert · update | select, insert, update |
 | `sync_meta` | select | select |
 | `movement_tombstones` | **ninguna** | **ninguno** |
 
 - **Sin política DELETE en categorías/subcategorías a propósito**: se archivan, nunca se borran.
-  → [[005-categorias-se-archivan]]
+  → [[005-categorias-se-archivan]]. Cuentas y cierres siguen el mismo patrón (las cuentas se archivan,
+  los cierres se vacían). → [[009-la-foto-manda-cierre-mensual]]
 - **`(select auth.uid())`** en vez de `auth.uid()`: el planificador lo convierte en un InitPlan evaluado
   **una vez por consulta** en lugar de una por fila.
 - **`to authenticated`** evita que la política se evalúe siquiera para `anon`. Si `auth.uid()` es NULL la
@@ -170,7 +189,9 @@ blindan porque Postgres se niega a ejecutarlas fuera de un trigger.
 
 ## Migraciones
 
-Una sola por ahora: `20260808133140_schema.sql`. Termina con `notify pgrst, 'reload schema'`, necesario
-en un `db push` remoto (`db reset` ya lo hace). Para trabajar en local ver [[comandos-y-entorno]].
+Dos: `20260808133140_schema.sql` (esquema base) y `20260812173707_patrimonio.sql` (cuentas y cierres;
+también recrea `wipe_all_data()` para que barra las tablas nuevas → [[borrado-total]]). Ambas terminan
+con `notify pgrst, 'reload schema'`, necesario en un `db push` remoto (`db reset` ya lo hace). Para
+trabajar en local ver [[comandos-y-entorno]].
 
 Related: [[sync-model]] · [[sync]] · [[borrado-total]] · [[supabase-auth]] · [[comandos-y-entorno]]

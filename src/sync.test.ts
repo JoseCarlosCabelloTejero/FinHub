@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyPullToLocal, assembleCategories, diffCategoryDoc, fromMovementRow, monotonicStamp, repairDanglingRefs, toCategoryRow, toMovementRow, toSubRow } from './sync';
+import { applyPullToLocal, assembleCategories, diffCategoryDoc, fromAccountRow, fromClosingRow, fromMovementRow, monotonicStamp, repairDanglingRefs, toAccountRow, toCategoryRow, toClosingRow, toMovementRow, toSubRow } from './sync';
 import { defaultCategories } from './data';
-import type { Category, Movement, OutboxOp, Subcategory } from './types';
+import type { Account, Category, Closing, Movement, OutboxOp, Subcategory } from './types';
 
 // supabase.ts lanza al importarse si faltan las variables de entorno, así que los tests no pueden
 // cargarlo de verdad (mismo motivo que en Login.test.tsx). vi.hoisted es necesario porque la fábrica
@@ -24,6 +24,8 @@ const STAMP = '2026-02-01T00:00:00.000Z';
 const sub = (id: string, over: Partial<Subcategory> = {}): Subcategory => ({ id, name: id, order: 0, archived: false, updatedAt: T0, ...over });
 const cat = (id: string, over: Partial<Category> = {}): Category => ({ id, name: id, type: 'expense', order: 0, archived: false, updatedAt: T0, subcategories: [], ...over });
 const mov = (id: string, over: Partial<Movement> = {}): Movement => ({ id, type: 'expense', amount: 10, date: '2026-01-05', categoryId: 'c1', concept: id, createdAt: T0, updatedAt: T0, ...over });
+const acc = (id: string, over: Partial<Account> = {}): Account => ({ id, name: id, nature: 'asset', isInvestment: false, isLiquid: true, archived: false, order: 0, updatedAt: T0, ...over });
+const cierre = (accountId: string, over: Partial<Closing> = {}): Closing => ({ id: `${accountId}:2026-01`, accountId, month: '2026-01', balance: 100, updatedAt: T0, ...over });
 const rowsOf = (category: Category) => ({ catRow: toCategoryRow(category), subRows: category.subcategories.map((s) => toSubRow(category.id, s)) });
 
 describe('diffCategoryDoc', () => {
@@ -109,7 +111,7 @@ describe('repairDanglingRefs', () => {
 });
 
 describe('applyPullToLocal', () => {
-  const snapshot = { movements: [mov('m1'), mov('m2')], categories: [cat('c1', { subcategories: [sub('s1')] })] };
+  const snapshot = { movements: [mov('m1'), mov('m2')], categories: [cat('c1', { subcategories: [sub('s1')] })], accounts: [acc('a1')], closings: [cierre('a1')] };
 
   it('sin nada pendiente devuelve el snapshot del servidor', () => expect(applyPullToLocal(snapshot, [])).toEqual(snapshot));
 
@@ -134,6 +136,21 @@ describe('applyPullToLocal', () => {
     expect(category.name).toBe('Coche');
     expect(category.subcategories.map((s) => s.id)).toEqual(['s1']);
   });
+
+  it('una cuenta y un cierre pendientes sobreviven al pull', () => {
+    const pending = [
+      { table: 'accounts' as const, kind: 'upsert' as const, id: 'a2', payload: toAccountRow(acc('a2')), updatedAt: STAMP },
+      { table: 'account_closings' as const, kind: 'upsert' as const, id: 'a1:2026-02', payload: toClosingRow(cierre('a1', { id: 'a1:2026-02', month: '2026-02', balance: 250 })), updatedAt: STAMP },
+    ];
+    const merged = applyPullToLocal(snapshot, pending);
+    expect(merged.accounts.map((a) => a.id)).toEqual(['a1', 'a2']);
+    expect(merged.closings.map((c) => c.id)).toEqual(['a1:2026-01', 'a1:2026-02']);
+  });
+
+  it('un cierre pendiente pisa la versión que traía el servidor', () => {
+    const pending = { table: 'account_closings' as const, kind: 'upsert' as const, id: 'a1:2026-01', payload: toClosingRow(cierre('a1', { balance: 999 })), updatedAt: STAMP };
+    expect(applyPullToLocal(snapshot, [pending]).closings.find((c) => c.id === 'a1:2026-01')?.balance).toBe(999);
+  });
 });
 
 describe('mapeo de filas', () => {
@@ -141,6 +158,11 @@ describe('mapeo de filas', () => {
   it('las notas vacías viajan como null', () => expect(toMovementRow(mov('m1', { notes: '' })).notes).toBeNull());
   it('el importe se mantiene numérico en el viaje de vuelta', () => expect(fromMovementRow(toMovementRow(mov('m1', { amount: 12.34 }))).amount).toBe(12.34));
   it('un movimiento sin subcategoría vuelve sin la clave', () => expect(fromMovementRow(toMovementRow(mov('m1'))).subcategoryId).toBeUndefined());
+  it('la cuenta no pierde sus flags en el viaje de ida y vuelta', () => { const account = acc('a1', { nature: 'liability', isInvestment: true, isLiquid: false }); expect(fromAccountRow(toAccountRow(account))).toEqual(account); });
+  it('un cierre vaciado conserva el balance null', () => expect(fromClosingRow(toClosingRow(cierre('a1', { balance: null }))).balance).toBeNull());
+  it('un aportado a cero no se pierde en el viaje de vuelta', () => expect(fromClosingRow(toClosingRow(cierre('a1', { contributed: 0 }))).contributed).toBe(0));
+  it('un cierre sin aportado vuelve sin la clave', () => expect(fromClosingRow(toClosingRow(cierre('a1'))).contributed).toBeUndefined());
+  it('la nota vacía del cierre viaja como null', () => expect(toClosingRow(cierre('a1', { note: '' })).note).toBeNull());
 });
 
 describe('monotonicStamp', () => {
@@ -206,11 +228,13 @@ describe('motor de sync', () => {
 
   it('aplica en local lo que baja del servidor', async () => {
     const category = cat('c1', { subcategories: [sub('s1')] });
-    mocks.select.mockImplementation((table: string) => Promise.resolve({ data: table === 'movements' ? [toMovementRow(mov('m1'))] : table === 'categories' ? [toCategoryRow(category)] : [toSubRow('c1', sub('s1'))], error: null }));
+    mocks.select.mockImplementation((table: string) => Promise.resolve({ data: table === 'movements' ? [toMovementRow(mov('m1'))] : table === 'categories' ? [toCategoryRow(category)] : table === 'subcategories' ? [toSubRow('c1', sub('s1'))] : table === 'accounts' ? [toAccountRow(acc('a1'))] : [toClosingRow(cierre('a1'))], error: null }));
     await sync.syncNow();
     const data = await db.getAllData();
     expect(data.movements.map((m) => m.id)).toEqual(['m1']);
     expect(data.categories).toEqual([category]);
+    expect(data.accounts).toEqual([acc('a1')]);
+    expect(data.closings).toEqual([cierre('a1')]);
   });
 
   it('no reescribe nada si el servidor devuelve lo mismo que la vez anterior', async () => {
@@ -283,6 +307,24 @@ describe('motor de sync', () => {
       expect((await db.readOutbox()).map((entry) => [entry.op.table, entry.op.id])).toEqual([['categories', 'c1']]);
     });
 
+    it('guarda el cierre y lo encola con el mismo sello', async () => {
+      await sync.saveClosingSynced(cierre('a1', { updatedAt: 'sello viejo' }));
+      const [{ op }] = await db.readOutbox();
+      const stored = (await db.getAllData()).closings[0];
+      expect(op).toMatchObject({ table: 'account_closings', kind: 'upsert', id: 'a1:2026-01' });
+      expect((op.payload as { updated_at: string }).updated_at).toBe(stored.updatedAt);
+      expect(stored.updatedAt).not.toBe('sello viejo');
+    });
+
+    it('vaciar un cierre encola un upsert con balance null, nunca un delete', async () => {
+      await sync.saveClosingSynced(cierre('a1'));
+      await sync.saveClosingSynced(cierre('a1', { balance: null }));
+      const ops = (await db.readOutbox()).map((entry) => entry.op);
+      expect(ops.map((op) => op.kind)).toEqual(['upsert', 'upsert']);
+      expect((ops[1].payload as { balance: number | null }).balance).toBeNull();
+      expect((await db.getAllData()).closings[0].balance).toBeNull();
+    });
+
     it('el borrado total exige conexión y no destruye nada si el servidor falla', async () => {
       await sync.saveMovementSynced(mov('m1'));
       mocks.rpc.mockResolvedValue({ data: null, error: netError });
@@ -347,6 +389,32 @@ describe('motor de sync', () => {
       const first = mocks.upsert.mock.calls.length;
       await sync.syncNow();
       expect(mocks.upsert.mock.calls).toHaveLength(first);
+    });
+
+    it('las cuentas se suben antes que sus cierres, que dependen de ellas por FK', async () => {
+      await db.saveAccount(acc('a1'));
+      await db.saveClosing(cierre('a1'));
+      await db.saveMovement(mov('m1', { categoryId: 'income' }));
+      await sync.syncNow();
+      const tables = pushedTables();
+      expect(tables.indexOf('account_closings')).toBeGreaterThan(tables.lastIndexOf('accounts'));
+      // Y delante de todo lo demás: cuando la fase 4 escriba movements.account_id, este orden ya
+      // garantiza que la cuenta llega antes que el movimiento que la referencia.
+      expect(tables.indexOf('categories')).toBeGreaterThan(tables.lastIndexOf('account_closings'));
+    });
+
+    it('un cierre cuya cuenta no existe se omite en vez de estrellarse contra la FK', async () => {
+      await db.saveClosing(cierre('fantasma'));
+      await sync.syncNow();
+      expect(pushedIds()).not.toContain('fantasma:2026-01');
+    });
+
+    it('una cuenta que el servidor ya tiene no se reenvía, pero su cierre editado sí', async () => {
+      mocks.select.mockImplementation((table: string) => table === 'accounts' ? Promise.resolve({ data: [toAccountRow(acc('a1'))], error: null }) : remoteSeeds(table));
+      await db.saveAccount(acc('a1'));
+      await db.saveClosing(cierre('a1', { balance: 999, updatedAt: STAMP }));
+      await sync.syncNow();
+      expect(pushedTables()).toEqual(['account_closings']);
     });
   });
 });

@@ -5,14 +5,17 @@ up: "[[00-index]]"
 
 # Dominio: patrimonio
 
-> ⚠️ **Diseño propuesto. Nada de esto está implementado.** Esta nota describe el modelo antes de
-> escribirlo, para poder discutirlo barato. Cuando se implemente, se recorta a nota de dominio normal y
-> las decisiones grandes se extraen a su ADR.
+> ⚠️ **Parcialmente implementado.** El modelo, el esquema (Postgres + IndexedDB v4) y el sync de
+> cuentas y cierres ya existen (fase F1a); las decisiones grandes están extraídas en
+> [[009-la-foto-manda-cierre-mensual]]. La UI, los cálculos derivados y la vinculación de movimientos
+> llegan en las fases F1b-F4. Las secciones aún no implementadas siguen siendo diseño.
 
 La app registra hoy **flujos**: gastos e ingresos con sus categorías, porcentajes y gráficos. No sabe
 **cuánto dinero existe** ni dónde está. Este dominio añade la dimensión que falta: **saldo**.
 
-**Fuente de verdad**: este documento. No hay código todavía.
+**Fuente de verdad**: para el esquema y el sync, el código (`supabase/migrations/*_patrimonio.sql`,
+`src/db.ts`, `src/sync.ts` → [[postgres-schema]] · [[indexeddb-stores]] · [[sync]]); para lo demás,
+este documento.
 
 ## 1. Contexto
 
