@@ -69,6 +69,18 @@ npx supabase stop
 `project_id = "FinHub"` en `config.toml`. El usuario de pruebas se crea desde Studio → Authentication →
 Add user (la API de admin no pasa por `enable_signup = false`). → [[supabase-auth]]
 
+> ⚠️ **`[auth.email].enable_signup` no es "permitir registros".** El CLI lo traduce a
+> `GOTRUE_EXTERNAL_EMAIL_ENABLED`, que activa o desactiva el **proveedor de email entero**: con `false`,
+> ningún login por contraseña entra en local y la API devuelve `422 email_provider_disabled` aunque el
+> usuario exista y esté confirmado. Tiene que estar en **`true`**. Quien cierra la puerta a los registros
+> es `enable_signup = false` de `[auth]`, que llega como `GOTRUE_DISABLE_SIGNUP` y manda sobre todos los
+> proveedores (`/auth/v1/signup` responde `signup_disabled`). Comprobado con el CLI 2.113; la clave
+> `enabled` que uno esperaría en `[auth.email]` **no existe** en esta versión y se ignora en silencio.
+> Producción no depende de esto: sus proveedores se configuran en el dashboard.
+
+Cambiar cualquier cosa de `[auth]` exige **`stop` + `start`**, no basta con reiniciar el contenedor: la
+env de gotrue se genera al levantar el stack.
+
 Para el proyecto remoto, `npx supabase db push` aplica las migraciones; el `notify pgrst, 'reload schema'`
 del final del fichero es necesario ahí (en `db reset` es automático). → [[postgres-schema]]
 

@@ -224,9 +224,12 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
-# Mismo motivo que el enable_signup de [auth]: los dos tienen que estar en false para cerrar la puerta.
-enable_signup = false
+# ⚠️ Esto NO es "permitir registros": el CLI lo traduce a GOTRUE_EXTERNAL_EMAIL_ENABLED, que activa o
+# desactiva el proveedor de email ENTERO. Con false, en local no entra ningún login por contraseña
+# (422 email_provider_disabled) aunque el usuario exista y esté confirmado. Quien cierra la puerta a
+# los registros es `enable_signup = false` de [auth], que llega a gotrue como GOTRUE_DISABLE_SIGNUP y
+# manda sobre todos los proveedores.
+enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
