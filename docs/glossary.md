@@ -22,6 +22,24 @@ Vocabulario del proyecto. Buena parte solo vivía en comentarios del código.
 - **Recuperados** — categoría archivada que `repairDanglingRefs` crea (una por tipo) para adoptar
   movimientos cuya categoría ya no existe, y que así las FK de Postgres los acepten. → [[sync]]
 
+## Patrimonio
+
+> ⚠️ Vocabulario de un **diseño propuesto**, todavía sin implementar. → [[patrimonio]]
+
+- **Cuenta** — un contenedor de dinero: corriente, broker, hipoteca, tarjeta. Declara si es **activo o
+  pasivo** (de ahí el signo, que nunca se teclea), si es **de inversión** y si es **líquida**. Como las
+  categorías, **se archiva, nunca se borra**.
+- **Cierre** — el saldo de *una cuenta* en *un mes* (`YYYY-MM`). Es la foto manual que manda sobre los
+  movimientos. **Ojo: no es lo mismo que un *snapshot*** (ver Sincronización, más abajo), que en este
+  proyecto significa el estado completo del servidor.
+- **Aportado** — dinero propio que entró en una cuenta ese mes. Solo se pregunta en cuentas de inversión,
+  porque es lo único que permite separar el ahorro de la rentabilidad. En un pasivo significaría el
+  principal amortizado.
+- **Descuadre** — ahorro real (según los cierres) − ahorro contable (según los movimientos). **No es un
+  error**: es la medida de lo que no registraste, y con un préstamo nunca da cero.
+- **Disponible** — la suma de las cuentas marcadas como líquidas, con su signo: suma la corriente, resta
+  la tarjeta, ignora el broker y la hipoteca.
+
 ## Sincronización
 
 - **Outbox** — store de IndexedDB con las escrituras pendientes de subir. Clave autoincremental

@@ -34,6 +34,7 @@ barato que grepear `src/` entero y el esquema SQL.
 - [[movimientos]] — la entidad central: ingreso o gasto.
 - [[categorias]] — categorías y subcategorías. **Nunca se borran, se archivan.**
 - [[periodos]] — mes/año y las semanas 1-5 por día natural.
+- [[patrimonio]] — cuentas, cierres mensuales y descuadre. ⚠️ **diseño propuesto, sin implementar.**
 - [[preferencias]] — lo único que no se sincroniza, y por qué.
 - [[sync-model]] — outbox, LWW, lápidas, epoch de borrado.
 
@@ -71,7 +72,7 @@ barato que grepear `src/` entero y el esquema SQL.
 Cada nota lleva `tags` en el frontmatter:
 
 - `type/*` — `moc`, `module`, `domain`, `flow`, `reference`, `decision`.
-- `domain/*` — `movimientos`, `categorias`, `periodos`, `sync`, `auth`, `ui`, `datos`.
+- `domain/*` — `movimientos`, `categorias`, `periodos`, `patrimonio`, `sync`, `auth`, `ui`, `datos`.
 - `area/*` — `cliente` (navegador) o `servidor` (Postgres/Supabase).
 
 Abre la vista de grafo en Obsidian y colorea por tag para ver los grupos. Para abrir el vault:
