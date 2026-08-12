@@ -17,9 +17,12 @@ describe('migración de IndexedDB v2 a v3',()=>{
     const {dbPromise,getAllData}=await import('./db');
     const db=await dbPromise;
 
-    expect(db.version).toBe(3);
+    // La cadena de bloques del upgrade lleva la base hasta la versión actual, no solo a la v3.
+    expect(db.version).toBe(4);
     expect(db.objectStoreNames.contains('outbox')).toBe(true);
     expect(db.objectStoreNames.contains('meta')).toBe(true);
+    expect(db.objectStoreNames.contains('accounts')).toBe(true);
+    expect(db.objectStoreNames.contains('closings')).toBe(true);
 
     const {categories,movements}=await getAllData();
     const coche=categories.find(c=>c.id==='expense-coche')!;

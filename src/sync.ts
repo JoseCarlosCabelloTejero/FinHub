@@ -1,7 +1,7 @@
-import { bootstrapData, clearAllData, clearOutbox, deleteOutboxOp, enqueueOutbox, getAllData, getCategory, getSyncMeta, readOutbox, removeMovement, replaceLocalData, saveCategory, saveMovement, saveSyncMeta } from './db';
+import { bootstrapData, clearAllData, clearOutbox, deleteOutboxOp, enqueueOutbox, getAllData, getCategory, getSyncMeta, readOutbox, removeMovement, replaceLocalData, saveAccount, saveCategory, saveClosing, saveMovement, saveSyncMeta } from './db';
 import { EPOCH_UPDATED_AT } from './data';
 import { resolveUserId, supabase } from './supabase';
-import type { Category, Movement, MovementType, OutboxOp, Subcategory, SyncState } from './types';
+import type { Account, AccountNature, Category, Closing, Movement, MovementType, OutboxOp, Subcategory, SyncState } from './types';
 
 // -----------------------------------------------------------------------------
 // Filas del servidor
@@ -17,8 +17,10 @@ import type { Category, Movement, MovementType, OutboxOp, Subcategory, SyncState
 export type CategoryRow = { id: string; name: string; type: MovementType; order: number; archived: boolean; updated_at: string };
 export type SubcategoryRow = { id: string; category_id: string; name: string; order: number; archived: boolean; updated_at: string };
 export type MovementRow = { id: string; type: MovementType; amount: number; date: string; category_id: string; subcategory_id: string | null; concept: string; notes: string | null; created_at: string; updated_at: string };
+export type AccountRow = { id: string; name: string; nature: AccountNature; is_investment: boolean; is_liquid: boolean; archived: boolean; order: number; updated_at: string };
+export type ClosingRow = { id: string; account_id: string; month: string; balance: number | null; contributed: number | null; note: string | null; updated_at: string };
 
-export interface Snapshot { movements: Movement[]; categories: Category[] }
+export interface Snapshot { movements: Movement[]; categories: Category[]; accounts: Account[]; closings: Closing[] }
 
 // El payload del outbox se guarda ya como fila, así que al releerlo hay que estrecharlo de vuelta.
 const asRow = <T>(payload: Record<string, unknown>) => payload as unknown as T;
@@ -31,6 +33,12 @@ export const fromSubRow = (row: SubcategoryRow): Subcategory => ({ id: row.id, n
 // la FK lo rechazaría. Se mapea a null aquí, en el único sitio que conoce el esquema del servidor.
 export const toMovementRow = (movement: Movement): MovementRow => ({ id: movement.id, type: movement.type, amount: movement.amount, date: movement.date, category_id: movement.categoryId, subcategory_id: movement.subcategoryId || null, concept: movement.concept, notes: movement.notes || null, created_at: movement.createdAt, updated_at: movement.updatedAt });
 export const fromMovementRow = (row: MovementRow): Movement => ({ id: row.id, type: row.type, amount: row.amount, date: row.date, categoryId: row.category_id, ...(row.subcategory_id ? { subcategoryId: row.subcategory_id } : {}), concept: row.concept, ...(row.notes ? { notes: row.notes } : {}), createdAt: row.created_at, updatedAt: row.updated_at });
+export const toAccountRow = (account: Account): AccountRow => ({ id: account.id, name: account.name, nature: account.nature, is_investment: account.isInvestment, is_liquid: account.isLiquid, archived: account.archived, order: account.order, updated_at: account.updatedAt });
+export const fromAccountRow = (row: AccountRow): Account => ({ id: row.id, name: row.name, nature: row.nature, isInvestment: row.is_investment, isLiquid: row.is_liquid, archived: row.archived, order: row.order, updatedAt: row.updated_at });
+// `contributed` es un número y 0 es un valor legítimo ("este mes no aporté, y lo sé"): el spread de
+// vuelta comprueba null explícitamente en vez del truthy que usan las notas.
+export const toClosingRow = (closing: Closing): ClosingRow => ({ id: closing.id, account_id: closing.accountId, month: closing.month, balance: closing.balance, contributed: closing.contributed ?? null, note: closing.note || null, updated_at: closing.updatedAt });
+export const fromClosingRow = (row: ClosingRow): Closing => ({ id: row.id, accountId: row.account_id, month: row.month, balance: row.balance, ...(row.contributed === null ? {} : { contributed: row.contributed }), ...(row.note ? { note: row.note } : {}), updatedAt: row.updated_at });
 
 /** Timestamp que nunca retrocede en este dispositivo. */
 // El trigger LWW del servidor descarta lo que llegue con updated_at <= al que ya tiene, así que un
@@ -117,7 +125,7 @@ const recoveredCategory = (type: MovementType): Category => ({ id: `recuperados-
 // filas con un 23503, que el push trata como op irrecuperable: se perderían movimientos reales. Una
 // categoría por tipo y no una sola porque el modal filtra las categorías por el tipo del movimiento
 // (App.tsx), y con una sola de gasto los ingresos recuperados no se podrían ni reasignar a mano.
-export function repairDanglingRefs(movements: Movement[], categories: Category[]): Snapshot {
+export function repairDanglingRefs(movements: Movement[], categories: Category[]): { movements: Movement[]; categories: Category[] } {
   const byId = new Map(categories.map((category) => [category.id, category]));
   const created = new Map<MovementType, Category>();
   const repaired = movements.map((movement) => {
@@ -143,6 +151,8 @@ export function repairDanglingRefs(movements: Movement[], categories: Category[]
 export function applyPullToLocal(snapshot: Snapshot, pending: OutboxOp[]): Snapshot {
   const movements = new Map(snapshot.movements.map((movement) => [movement.id, movement]));
   const categories = new Map(snapshot.categories.map((category) => [category.id, category]));
+  const accounts = new Map(snapshot.accounts.map((account) => [account.id, account]));
+  const closings = new Map(snapshot.closings.map((closing) => [closing.id, closing]));
   for (const op of pending) {
     if (op.table === 'movements') {
       if (op.kind === 'delete') movements.delete(op.id);
@@ -150,6 +160,9 @@ export function applyPullToLocal(snapshot: Snapshot, pending: OutboxOp[]): Snaps
       continue;
     }
     if (!op.payload) continue;
+    // Solo upsert: el cliente nunca emite delete para cuentas ni cierres (se archivan / se vacían).
+    if (op.table === 'accounts') { accounts.set(op.id, fromAccountRow(asRow<AccountRow>(op.payload))); continue; }
+    if (op.table === 'account_closings') { closings.set(op.id, fromClosingRow(asRow<ClosingRow>(op.payload))); continue; }
     if (op.table === 'categories') {
       const row = asRow<CategoryRow>(op.payload);
       categories.set(op.id, { ...fromCategoryRow(row), subcategories: categories.get(op.id)?.subcategories ?? [] });
@@ -162,7 +175,7 @@ export function applyPullToLocal(snapshot: Snapshot, pending: OutboxOp[]): Snaps
     const sub = fromSubRow(row);
     categories.set(parent.id, { ...parent, subcategories: [...parent.subcategories.filter((candidate) => candidate.id !== sub.id), sub].sort((a, b) => a.order - b.order) });
   }
-  return { movements: [...movements.values()], categories: [...categories.values()] };
+  return { movements: [...movements.values()], categories: [...categories.values()], accounts: [...accounts.values()], closings: [...closings.values()] };
 }
 
 // -----------------------------------------------------------------------------
@@ -234,6 +247,20 @@ export async function saveCategorySynced(category: Category) {
   await enqueue(ops);
 }
 
+export async function saveAccountSynced(account: Account) {
+  const stamped = { ...account, updatedAt: await nextStamp() };
+  await saveAccount(stamped);
+  await enqueue([{ table: 'accounts', kind: 'upsert', id: stamped.id, payload: toAccountRow(stamped), updatedAt: stamped.updatedAt }]);
+}
+
+// Vaciar un cierre es guardarlo con balance null (y aportado/nota fuera): nunca se emite un delete,
+// que es lo que permite a este dominio vivir sin lápidas.
+export async function saveClosingSynced(closing: Closing) {
+  const stamped = { ...closing, updatedAt: await nextStamp() };
+  await saveClosing(stamped);
+  await enqueue([{ table: 'account_closings', kind: 'upsert', id: stamped.id, payload: toClosingRow(stamped), updatedAt: stamped.updatedAt }]);
+}
+
 /** Borrado total. A diferencia del resto, este exige conexión. */
 // Un borrado que se encolara podría cruzarse con un dispositivo que aún tiene cambios pendientes y
 // repoblaría lo que se acaba de vaciar. Hacerlo en el servidor primero incrementa el wipe_epoch, que
@@ -302,17 +329,19 @@ async function pushOutbox() {
 let lastPullKey: string | null = null;
 
 async function fetchSnapshot() {
-  const [movements, categories, subcategories] = await Promise.all([
+  const [movements, categories, subcategories, accounts, closings] = await Promise.all([
     supabase.from('movements').select('*'),
     supabase.from('categories').select('*'),
     supabase.from('subcategories').select('*'),
+    supabase.from('accounts').select('*'),
+    supabase.from('account_closings').select('*'),
   ]);
-  const failed = [movements, categories, subcategories].find((result) => result.error);
+  const failed = [movements, categories, subcategories, accounts, closings].find((result) => result.error);
   if (failed) throw new Error(failed.error?.message ?? 'Error al descargar los datos');
-  const movementRows = (movements.data ?? []) as MovementRow[], catRows = (categories.data ?? []) as CategoryRow[], subRows = (subcategories.data ?? []) as SubcategoryRow[];
-  // "Vacío" se mide por categorías: no puede haber movimientos sin ellas (hay FK), así que cero
-  // categorías significa servidor virgen.
-  return { key: JSON.stringify([movementRows, catRows, subRows]), snapshot: { movements: movementRows.map(fromMovementRow), categories: assembleCategories(catRows, subRows) } as Snapshot, empty: catRows.length === 0 };
+  const movementRows = (movements.data ?? []) as MovementRow[], catRows = (categories.data ?? []) as CategoryRow[], subRows = (subcategories.data ?? []) as SubcategoryRow[], accountRows = (accounts.data ?? []) as AccountRow[], closingRows = (closings.data ?? []) as ClosingRow[];
+  // "Vacío" se sigue midiendo por categorías: son la única semilla obligatoria, así que un servidor
+  // usado no puede tener cero. Las cuentas no valen de vara: no existir cuentas es un estado normal.
+  return { key: JSON.stringify([movementRows, catRows, subRows, accountRows, closingRows]), snapshot: { movements: movementRows.map(fromMovementRow), categories: assembleCategories(catRows, subRows), accounts: accountRows.map(fromAccountRow), closings: closingRows.map(fromClosingRow) } as Snapshot, empty: catRows.length === 0 };
 }
 
 // -----------------------------------------------------------------------------
@@ -323,8 +352,17 @@ async function fetchSnapshot() {
 // Va por el outbox y no en bloque a propósito: si se corta la conexión a mitad, lo ya confirmado no
 // se repite y el resto se reintenta solo. Una subida en bloque sería más rápida pero habría que
 // rehacerla entera, y esto ocurre una única vez por dispositivo.
-function snapshotToOps({ movements, categories }: Snapshot, keep: (op: OutboxOp) => boolean = () => true) {
+function snapshotToOps({ movements, categories, accounts, closings }: Snapshot, keep: (op: OutboxOp) => boolean = () => true) {
   const ops: OutboxOp[] = [];
+  // Las cuentas van las primeras de todo: sus cierres dependen de ellas por FK hoy, y los movimientos
+  // también lo harán cuando la fase 4 escriba account_id. Dejar el orden resuelto aquí es lo que hace
+  // que esa fase no toque esta función.
+  const accountIds = new Set(accounts.map((account) => account.id));
+  for (const account of accounts) ops.push({ table: 'accounts', kind: 'upsert', id: account.id, payload: toAccountRow(account), updatedAt: account.updatedAt });
+  // Un cierre cuya cuenta no viaje en el snapshot se estrellaría contra la FK y el push lo
+  // descartaría como irrecuperable: mejor omitirlo aquí (el análogo barato de repairDanglingRefs,
+  // sin inventar cuentas de recuperación).
+  for (const closing of closings) if (accountIds.has(closing.accountId)) ops.push({ table: 'account_closings', kind: 'upsert', id: closing.id, payload: toClosingRow(closing), updatedAt: closing.updatedAt });
   for (const category of categories) {
     ops.push({ table: 'categories', kind: 'upsert', id: category.id, payload: toCategoryRow(category), updatedAt: category.updatedAt });
     for (const sub of category.subcategories) ops.push({ table: 'subcategories', kind: 'upsert', id: sub.id, payload: toSubRow(category.id, sub), updatedAt: sub.updatedAt });
@@ -359,7 +397,7 @@ async function firstSync() {
 async function uploadEverything() {
   await bootstrapData();
   const local = await getAllData();
-  const repaired = repairDanglingRefs(local.movements, local.categories);
+  const repaired = { ...repairDanglingRefs(local.movements, local.categories), accounts: local.accounts, closings: local.closings };
   await replaceLocalData(() => repaired);
   await prependOps(snapshotToOps(repaired));
 }
@@ -373,6 +411,7 @@ async function mergeWithServer(snapshot: Snapshot, key: string) {
   const remoteCategories = new Set(snapshot.categories.map((category) => category.id));
   const remoteSubs = new Set(snapshot.categories.flatMap((category) => category.subcategories.map((sub) => sub.id)));
   const remoteMovements = new Set(snapshot.movements.map((movement) => movement.id));
+  const remoteAccounts = new Set(snapshot.accounts.map((account) => account.id));
   const known = [...snapshot.categories, ...local.categories.filter((category) => !remoteCategories.has(category.id))];
   const knownIds = new Set(known.map((category) => category.id));
   const repaired = repairDanglingRefs(local.movements, known);
@@ -380,11 +419,15 @@ async function mergeWithServer(snapshot: Snapshot, key: string) {
   // el servidor no se tocan: ya están donde tienen que estar.
   const candidates = [...local.categories, ...repaired.categories.filter((category) => !knownIds.has(category.id))];
   const mine = (op: OutboxOp) => {
-    if (op.table === 'movements') return !remoteMovements.has(op.id);
+    // Cuentas como movimientos: ids uuid sin semillas, no chocan de verdad.
+    if (op.table === 'movements' || op.table === 'accounts') return !(op.table === 'movements' ? remoteMovements : remoteAccounts).has(op.id);
+    // Un cierre SÍ puede chocar de verdad (id determinista cuenta:mes = misma fila lógica en los dos
+    // lados). Se sube siempre y el LWW del servidor se queda con el sello más nuevo.
+    if (op.table === 'account_closings') return true;
     const remote = op.table === 'categories' ? remoteCategories : remoteSubs;
     return !remote.has(op.id) || op.updatedAt !== EPOCH_UPDATED_AT;
   };
-  const ops = snapshotToOps({ movements: repaired.movements, categories: candidates }, mine);
+  const ops = snapshotToOps({ movements: repaired.movements, categories: candidates, accounts: local.accounts, closings: local.closings }, mine);
   if (ops.length) await prependOps(ops);
   // Lo encolado se reproduce sobre el snapshot, así que sobrevive a esta sustitución de la caché.
   await replaceLocalData((pending) => applyPullToLocal(snapshot, pending));
