@@ -14,19 +14,21 @@ base ni conoce sus stores: [[sync]] y [[ui-app]] solo llaman a las funciones de 
 
 - `dbPromise` es un **singleton a nivel de módulo**: la base se abre al importar el fichero. Dos
   instancias competirían por la misma versión y por el bloqueo de `versionchange`.
-- Base `finhub-finanzas`, **versión 3**. Las migraciones y la copia desde la marca anterior están en
+- Base `finhub-finanzas`, **versión 4**. Las migraciones y la copia desde la marca anterior están en
   [[migraciones-idb]].
-- `bootstrapData()` siembra las categorías por defecto **solo si el store está vacío**.
-- `clearAllData()` vacía todo y vuelve a sembrar. Vacía también `outbox` y `meta`: dejar ops encoladas
-  tras un "Borrar todo" repoblaría el servidor recién vaciado. → [[borrado-total]]
+- `bootstrapData()` siembra las categorías por defecto **solo si el store está vacío**. Las cuentas y
+  cierres de [[patrimonio]] **no tienen semillas**.
+- `clearAllData()` vacía todo y vuelve a sembrar (solo categorías). Vacía también `outbox` y `meta`:
+  dejar ops encoladas tras un "Borrar todo" repoblaría el servidor recién vaciado. → [[borrado-total]]
 
 ## API
 
 | Función | Para qué |
 |---|---|
-| `getAllData()` | Lo que lee `reload()` en [[ui-app]]: movimientos + categorías |
+| `getAllData()` | Lo que lee `reload()` en [[ui-app]]: movimientos + categorías + cuentas + cierres |
 | `saveMovement` / `removeMovement` | Escritura cruda. **La UI no las llama**: usa las `*Synced` de [[sync]] |
 | `saveCategory` / `getCategory` | Idem. `getCategory` la usa `diffCategoryDoc` para comparar |
+| `saveAccount` / `saveClosing` | Escritura cruda de [[patrimonio]]. Misma regla: la UI usa las `*Synced` |
 | `savePreferences` / `loadPreferences` | Store `preferences`, clave `'main'` → [[preferencias]] |
 | `bootstrapData` / `clearAllData` | Siembra y borrado total |
 | `replaceLocalData(compute)` | Aplica un snapshot del servidor sobre la caché (ver abajo) |

@@ -16,7 +16,8 @@ líneas) y el que concentra la complejidad real.
 
 El fichero está dividido en secciones con cabeceras de comentario. En orden:
 
-1. **Filas del servidor** — `CategoryRow`, `SubcategoryRow`, `MovementRow` y sus mappers.
+1. **Filas del servidor** — `CategoryRow`, `SubcategoryRow`, `MovementRow`, `AccountRow`, `ClosingRow`
+   y sus mappers.
 2. **Diff de un documento de categoría** — `diffCategoryDoc`.
 3. **Reensamblado** — `assembleCategories`.
 4. **Reparación de referencias colgantes** — `repairDanglingRefs`.
@@ -42,6 +43,10 @@ subcategorías embebidas) y las filas del servidor (snake_case, normalizadas). T
   conoce el esquema del servidor, así que la traducción vive aquí.
 - `amount` es `number` en los dos lados: PostgREST serializa `numeric` con `to_json`, así que llega
   como número JSON. **No hacer `parseFloat`.**
+- En `ClosingRow`, ojo con la diferencia: `balance: null` es **un estado real** ("mes no revisado", va
+  y vuelve tal cual), mientras que `contributed`/`note` a null son ausencia. Y como `contributed` es un
+  número, el `0` es legítimo: el mapper de vuelta comprueba `null` explícitamente en vez del truthy que
+  usan las notas. → [[patrimonio]]
 
 ## `diffCategoryDoc(prev, next, stamp)` → `{ doc, ops }`
 
@@ -105,6 +110,9 @@ aparece por ninguna parte**: se escribe en IndexedDB, se encola, y lo encolado s
   sellos y todos son monótonos.
 - `removeMovementSynced` — encola un `delete`. El servidor deja una lápida.
 - `saveCategorySynced` — pasa por `diffCategoryDoc`.
+- `saveAccountSynced` / `saveClosingSynced` — upserts planos (sin diff: no llevan hijos embebidos).
+  **Vaciar un cierre = `saveClosingSynced` con `balance: null`**; nunca se emite `delete`, que es lo que
+  permite a [[patrimonio]] vivir sin lápidas. → [[009-la-foto-manda-cierre-mensual]]
 - `clearAllDataSynced` — **la única que exige conexión**. → [[borrado-total]]
 
 Después de encolar, `enqueue()` actualiza `pendingOps` y llama a `scheduleSync()` (debounce de 800 ms).
@@ -130,10 +138,19 @@ Dos detalles:
 
 ## Pull
 
-`fetchSnapshot()` se trae las tres tablas enteras en paralelo y calcula una `key` (el JSON de las
+`fetchSnapshot()` se trae las cinco tablas enteras en paralelo y calcula una `key` (el JSON de las
 filas). Si coincide con `lastPullKey` **no se reescribe IndexedDB ni se llama a `reload()`**: sin eso,
 el sondeo de cada minuto repintaría los gráficos y remontaría la tabla sin que nada hubiera cambiado.
-"Servidor vacío" se mide por **categorías**: no puede haber movimientos sin ellas. → [[pull]]
+"Servidor vacío" se sigue midiendo por **categorías**: son la única semilla obligatoria (no existir
+cuentas es un estado normal). → [[pull]]
+
+En `snapshotToOps` (la subida de un snapshot entero), el orden causal es **cuentas → cierres →
+categorías → subcategorías → movimientos**: los cierres dependen de su cuenta por FK hoy, y los
+movimientos lo harán cuando la fase 4 de [[patrimonio]] escriba `account_id`. Un cierre cuya cuenta no
+viaje en el snapshot **se omite** (el análogo barato de `repairDanglingRefs`, sin inventar cuentas de
+recuperación). Y en `mergeWithServer`, un cierre se sube **siempre** aunque el servidor ya tenga su id:
+el id determinista `cuenta:mes` puede chocar de verdad (misma fila lógica) y ahí debe decidir el LWW,
+no el cliente.
 
 ## El ciclo: `runSync`
 

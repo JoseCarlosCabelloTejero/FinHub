@@ -34,7 +34,7 @@ barato que grepear `src/` entero y el esquema SQL.
 - [[movimientos]] — la entidad central: ingreso o gasto.
 - [[categorias]] — categorías y subcategorías. **Nunca se borran, se archivan.**
 - [[periodos]] — mes/año y las semanas 1-5 por día natural.
-- [[patrimonio]] — cuentas, cierres mensuales y descuadre. ⚠️ **diseño propuesto, sin implementar.**
+- [[patrimonio]] — cuentas, cierres mensuales y descuadre. Esquema y sync hechos; UI pendiente (F1b-F4).
 - [[preferencias]] — lo único que no se sincroniza, y por qué.
 - [[sync-model]] — outbox, LWW, lápidas, epoch de borrado.
 
@@ -66,6 +66,7 @@ barato que grepear `src/` entero y el esquema SQL.
 - [[006-un-solo-usuario]] — tres capas cierran el acceso.
 - [[007-subcategorias-normalizadas-en-servidor]] — embebidas en cliente, filas en Postgres.
 - [[008-deploy-en-vercel]] — Vercel despliega; la Action de CI es semáforo, no puerta.
+- [[009-la-foto-manda-cierre-mensual]] — patrimonio: cierre por (cuenta, mes) con id determinista, sin lápidas.
 
 ## Cómo está organizado el grafo
 

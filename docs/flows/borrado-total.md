@@ -36,7 +36,7 @@ sequenceDiagram
         S-->>A: throw "Necesitas conexión para borrar todo"
         A-->>U: aviso · NADA se ha borrado
     else ok
-        Note over PG: epoch++ · borra movimientos,<br/>subcategorías y categorías ·<br/>purga las lápidas AL FINAL
+        Note over PG: epoch++ · borra movimientos,<br/>subcategorías, categorías,<br/>cierres y cuentas ·<br/>purga las lápidas AL FINAL
         PG-->>S: nuevo wipe_epoch
         S->>DB: clearAllData() — vacía todo y resiembra categorías
         S->>DB: saveSyncMeta({ userId, dataUserId, wipeEpoch, migratedAt: null })
@@ -71,6 +71,10 @@ sequenceDiagram
   el insert en `sync_meta` petaría con un `23502` opaco.
 - **El epoch se incrementa primero**: si algo falla después, toda la transacción se deshace y no queda un
   epoch incrementado sobre datos intactos.
+- **Barre también `account_closings` y `accounts`** (hijo antes que padre, y movimientos antes que
+  cuentas, porque `movements.account_id` las referencia): sin esto, la próxima sincronización repoblaría
+  un patrimonio que el usuario creía eliminado. **Sin resiembra**: el dominio patrimonio no tiene datos
+  por defecto. → [[patrimonio]]
 - **Las lápidas se purgan SIEMPRE al final**: el `DELETE` de movimientos acaba de disparar el trigger
   `AFTER DELETE` y ha creado una lápida por movimiento. Purgarlas antes las dejaría recién resucitadas.
 - Devuelve el nuevo `wipe_epoch`.
