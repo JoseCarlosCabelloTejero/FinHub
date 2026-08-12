@@ -5,23 +5,25 @@ up: "[[00-index]]"
 
 # Dominio: patrimonio
 
-> ⚠️ **Parcialmente implementado.** El modelo, el esquema (Postgres + IndexedDB v4) y el sync de
-> cuentas y cierres ya existen (fase F1a); las decisiones grandes están extraídas en
-> [[009-la-foto-manda-cierre-mensual]]. La UI, los cálculos derivados y la vinculación de movimientos
-> llegan en las fases F1b-F4. Las secciones aún no implementadas siguen siendo diseño.
+> ⚠️ **Parcialmente implementado.** Funciona el MVP: cuentas, cierres mensuales, patrimonio neto y
+> disponible (fases F1a-F1b). Las decisiones grandes están extraídas en
+> [[009-la-foto-manda-cierre-mensual]]. **Siguen siendo diseño** la variación mensual con el reparto
+> ahorro/rentabilidad y su gráfico (secciones 5-6, fase F2), el descuadre "sin clasificar" (secciones 6-7,
+> F3) y la vinculación de movimientos a una cuenta (sección 8, F4).
 
-La app registra hoy **flujos**: gastos e ingresos con sus categorías, porcentajes y gráficos. No sabe
-**cuánto dinero existe** ni dónde está. Este dominio añade la dimensión que falta: **saldo**.
+La app registraba **flujos**: gastos e ingresos con sus categorías, porcentajes y gráficos. No sabía
+**cuánto dinero existe** ni dónde está. Este dominio añade la dimensión que faltaba: **saldo**.
 
-**Fuente de verdad**: para el esquema y el sync, el código (`supabase/migrations/*_patrimonio.sql`,
-`src/db.ts`, `src/sync.ts` → [[postgres-schema]] · [[indexeddb-stores]] · [[sync]]); para lo demás,
-este documento.
+**Fuente de verdad**: el código. El esquema y el sync en `supabase/migrations/*_patrimonio.sql`,
+`src/db.ts` y `src/sync.ts` → [[postgres-schema]] · [[indexeddb-stores]] · [[sync]]; los cálculos en
+`src/calculations.ts` → [[calculations]]; la pantalla en `src/Patrimonio.tsx` → [[ui-app]]. Este documento
+manda solo en lo que aún no existe.
 
 ## 1. Contexto
 
-La aplicación registra hoy flujos. Este módulo añade la dimensión de **saldo**: cuánto hay en cada cuenta
-bancaria y en el broker, cómo evoluciona el patrimonio en el tiempo, y qué parte de esa evolución viene
-del ahorro y qué parte del mercado.
+Este módulo añade la dimensión de **saldo**: cuánto hay en cada cuenta bancaria y en el broker, cómo
+evoluciona el patrimonio en el tiempo, y qué parte de esa evolución viene del ahorro y qué parte del
+mercado.
 
 **Restricción de partida:** toda la entrada de datos es **manual**. No hay integración bancaria ni API de
 broker. El diseño se optimiza para que el mantenimiento mensual cueste menos de dos minutos.
@@ -32,10 +34,10 @@ ahí la decisión de la sección 3.
 
 ## 2. Objetivos
 
-1. Saber el patrimonio neto actual y su evolución mensual.
-2. Saber cuánto dinero es disponible mañana sin vender nada.
-3. Separar el **ahorro** de la **rentabilidad** en la variación del patrimonio.
-4. Vincular los movimientos existentes a una cuenta, sin romper los agregados actuales.
+1. Saber el patrimonio neto actual ✅ y su evolución mensual (F2).
+2. Saber cuánto dinero es disponible mañana sin vender nada ✅.
+3. Separar el **ahorro** de la **rentabilidad** en la variación del patrimonio (F2).
+4. Vincular los movimientos existentes a una cuenta, sin romper los agregados actuales (F4).
 
 ### No objetivos
 
@@ -141,13 +143,17 @@ flowchart TB
     AC --> X
 ```
 
-| Cifra | Definición | Objetivo que cubre |
-|---|---|---|
-| **Patrimonio neto** | Σ activos − Σ pasivos | 1 |
-| **Disponible mañana** | Σ cuentas líquidas, con su signo | 2 |
-| **Ahorro real** | Variación de las cuentas no de inversión + aportado a las de inversión | 3 |
-| **Rentabilidad del mes** | Saldo final − saldo inicial − aportado, en cada cuenta de inversión | 3 |
-| **Descuadre** | Ahorro real − ahorro contable | (lo que hace fiable todo lo demás) |
+| Cifra | Definición | Objetivo que cubre | Estado |
+|---|---|---|---|
+| **Patrimonio neto** | Σ activos − Σ pasivos | 1 | ✅ `netWorth()` |
+| **Disponible mañana** | Σ cuentas líquidas, con su signo | 2 | ✅ `available()` |
+| **Ahorro real** | Variación de las cuentas no de inversión + aportado a las de inversión | 3 | F2 |
+| **Rentabilidad del mes** | Saldo final − saldo inicial − aportado, en cada cuenta de inversión | 3 | F2 |
+| **Descuadre** | Ahorro real − ahorro contable | (lo que hace fiable todo lo demás) | F3 |
+
+Las dos primeras viven en [[calculations]] y se muestran en gris, no en verde/rojo: son nivel, no flujo
+→ [[design-system]]. El dato de entrada del que salen —el aportado— **ya se captura** en el ritual, en
+cuentas de inversión y en pasivos, aunque las cifras que lo usan lleguen después.
 
 ### Sobre la rentabilidad: euros, no porcentaje
 
@@ -256,19 +262,25 @@ Si ese ruido llega a molestar de verdad, la opción de la entidad aparte sigue d
 ## 10. El ritual mensual
 
 Aquí se gana o se pierde el módulo: los dos minutos son el requisito duro, así que la interacción es parte
-del diseño y no un detalle posterior.
+del diseño y no un detalle posterior. Está implementado en la subvista *Cierre mensual* → [[ui-app]]
 
 - **Una sola pantalla**, *"Cierre de marzo"*: las cuentas activas en orden fijo, un campo por cuenta.
-- **Campo vacío, con el saldo anterior como pista en gris.** No prerrellenado. Prerrellenar arrastraría en
-  silencio el número del mes pasado a la serie histórica cada vez que te saltas una cuenta. Un campo vacío
-  significa *"no revisado"*, y eso es información. Teclear cinco números cabe de sobra en dos minutos.
-- **El total se recalcula en vivo**, para cazar un dedazo antes de guardar.
+- **Campo vacío, con el último saldo conocido como pista en gris.** No prerrellenado. Prerrellenar
+  arrastraría en silencio el número del mes pasado a la serie histórica cada vez que te saltas una cuenta.
+  Un campo vacío significa *"no revisado"*, y eso es información. Teclear cinco números cabe de sobra en
+  dos minutos.
+- **El total se recalcula en vivo** con lo que hay en pantalla, para cazar un dedazo antes de guardar, y
+  con él el contador de cuentas revisadas.
 - **Un mes incompleto se pinta como incompleto.** No se completa con lo del mes anterior.
-- **Los meses sin cierre no se interpolan**: la serie tiene un hueco. Interpolar inventaría rentabilidad
-  que nadie ganó. Un hueco es honesto; una línea suave es mentira.
-- **Editar un cierre pasado tiene que ser posible.** Los errores se descubren tres meses después, y como
-  todo es derivado, corregir un saldo recalcula la serie sola.
-- **Aviso discreto** si el mes anterior no tiene cierre. Nada de notificaciones push.
+- **Editar un cierre pasado es posible**, y navegar hacia atrás no tiene límite. Los errores se descubren
+  tres meses después, y como todo es derivado, corregir un saldo recalcula lo demás solo. Hacia delante
+  el selector se detiene en el mes en curso: un cierre futuro no significa nada.
+- **Un cierre se vacía, no se borra**: el saldo pasa a `null`, que es un estado real ("no revisado") y no
+  una ausencia. Por eso este dominio no necesita lápidas → [[009-la-foto-manda-cierre-mensual]]
+
+Pendiente de F2: **los meses sin cierre no se interpolan** en el gráfico —la serie tiene un hueco, porque
+interpolar inventaría rentabilidad que nadie ganó— y de F3, el **aviso discreto** si el mes anterior no
+tiene cierre (nada de notificaciones push).
 
 ## 11. Qué le exige este dominio al sync
 
@@ -289,10 +301,12 @@ principio → [[sync-model]]
 Verde y rojo están reservados en exclusiva a ingreso y gasto; todo lo demás es la escala de grises
 → [[design-system]]
 
-Propuesta: **la variación (Δ) sí usa verde y rojo** —es un flujo, con la misma semántica de "mejora" y
-"empeora"— y **el nivel (el saldo, el patrimonio) va en gris**. Es coherente con la regla actual en vez de
-romperla, pero **extiende su enunciado**, así que al implementarlo hay que actualizar la nota del sistema
-de diseño en el mismo PR.
+**El nivel (el saldo, el patrimonio) va en gris**, y eso ya está aplicado: el neto se pinta neutral aunque
+sea negativo, porque un pasivo no es un gasto.
+
+Sigue en propuesta la otra mitad: **que la variación (Δ) sí use verde y rojo** —es un flujo, con la misma
+semántica de "mejora" y "empeora"—. Es coherente con la regla actual en vez de romperla, pero **extiende su
+enunciado**, así que al implementarlo (F2) hay que actualizar la nota del sistema de diseño en el mismo PR.
 
 Nota relacionada: un gráfico de barras apiladas por cuenta es tentador y no se recomienda. La rampa del
 proyecto solo distingue bien seis escalones, límite ya conocido y ya sufrido en el donut de categorías.

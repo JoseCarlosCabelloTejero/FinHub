@@ -64,6 +64,43 @@ categoría, mismo color siempre, sin importar su puesto en el gasto del mes. Con
 gasto en el mismo periodo, dos pueden coincidir en color — límite matemático de 6 tonos para más
 categorías, no un bug. → [[design-system]]
 
+## Patrimonio: cuentas y cierres
+
+Un cierre vive en un **mes** (`'YYYY-MM'`), no en una fecha. Nada de este bloque pasa por `filterPeriod`
+ni por `periodBounds`, que trabajan con días: los helpers de mes son propios. Confundir las dos cosas es
+el riesgo 4 de [[patrimonio]] → [[periodos]]
+
+| Función | Qué devuelve |
+|---|---|
+| `currentMonth()` | El mes en curso como `'2026-08'` |
+| `shiftMonth(month, delta)` | El mes desplazado; el salto de año lo resuelve `date-fns` (`2026-01` → `2025-12`) |
+| `previousMonth(month)` | `shiftMonth(month, -1)` |
+| `monthLabel(month)` | `'marzo 2026'` para la UI |
+| `closingId(accountId, month)` | El id determinista `` `${accountId}:${month}` `` |
+| `latestClosings(closings, before?)` | Un cierre por cuenta: el del mes más alto **con saldo**. Con `before`, solo meses estrictamente anteriores |
+| `netWorth(accounts, closings)` | Σ activos − Σ pasivos |
+| `available(accounts, closings)` | El "disponible mañana": solo cuentas líquidas, con su signo |
+| `monthCompleteness(accounts, closings, month)` | `{ reviewed, total }` |
+| `parseAmount(raw)` | El importe tecleado, o `null` si el campo está vacío |
+
+Cuatro reglas que sostienen estas funciones:
+
+- **El signo lo pone la naturaleza de la cuenta**, nunca quien teclea. Un saldo es siempre positivo y un
+  pasivo se resta al agregarse. Así un pasivo tecleado en negativo —que dispararía el patrimonio— es
+  imposible por diseño, sin una sola validación.
+- **`balance: null` es "no revisado", y eso no es un saldo de 0.** `latestClosings` salta esos meses (cae
+  al último que sí se revisó) y `netWorth` los cuenta como 0 en vez de arrastrar el mes anterior: un mes
+  incompleto se ve incompleto.
+- **`parseAmount('')` es `null`, no 0.** `Number('') === 0`, y ese cero acabaría en la serie histórica
+  como un saldo real cada vez que te saltas una cuenta en el ritual. Es la trampa con test propio.
+- **Quién entra lo decide el caller.** `netWorth` no filtra archivadas: el nivel actual le pasa solo las
+  activas, y la serie histórica (pendiente) tendrá que incluirlas. Σ activos y Σ pasivos no necesitan
+  función: son `netWorth` con la lista ya filtrada por `nature`.
+
+`available` merece una nota: **`isLiquid` hace dos trabajos con un solo interruptor**, porque suma la
+corriente y resta la tarjeta (líquida y pasivo a la vez) ignorando el broker y la hipoteca. No hace falta
+un segundo atributo de "exigible a corto plazo".
+
 ## Al añadir lógica aquí
 
 1. Que siga siendo **pura**: entra data, sale data. Nada de IndexedDB, red o React.
@@ -71,4 +108,4 @@ categorías, no un bug. → [[design-system]]
 3. Si es un cálculo que la UI ya hace inline (por ejemplo el filtrado de la tabla de movimientos, que
    hoy vive en `App.tsx`), traerlo aquí es una mejora, no un cambio de alcance gratuito.
 
-Related: [[periodos]] · [[charts]] · [[ui-app]] · [[testing]]
+Related: [[periodos]] · [[charts]] · [[ui-app]] · [[patrimonio]] · [[testing]]
