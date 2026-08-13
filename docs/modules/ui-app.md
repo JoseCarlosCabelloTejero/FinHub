@@ -29,6 +29,7 @@ flowchart TD
     Fin --> Pages["Summary · Weekly · Movements · Categories"]
     Fin --> Pat["Patrimonio"]
     Pat --> PatViews["Nivel · Cierre mensual · Cuentas"]
+    PatViews -->|"lazy + Suspense"| NetChart["NetWorthChart (Charts.tsx)"]
     Fin --> Modals["MovementModal · CategoryModal · AccountModal"]
     Fin --> Live["región aria-live + toast"]
 ```
@@ -99,7 +100,8 @@ crear una segunda.
   el nombre de la categoría cae a `'Sin categoría'`.
 - **`Categories`** — renombrar, archivar/activar, reordenar, añadir subcategoría (con `prompt()`) y la
   zona de peligro con "Borrar todo". → [[categorias]] · [[borrado-total]]
-- **`Patrimonio`** — cuentas, cierres mensuales y el nivel actual, en tres subvistas. Ver abajo.
+- **`Patrimonio`** — cuentas, cierres mensuales, el nivel actual y su evolución, en tres subvistas. Ver
+  abajo.
 
 `pages` es la **fuente única** de `[id, icono, etiqueta, título]`: la usan el nav lateral, el nav móvil
 y el `<h1>`, que antes repetían la misma lista tres veces.
@@ -113,11 +115,29 @@ Tres subvistas con un `.segmented` propio, en estado local — **no** en las pre
 subvista no es una preferencia que valga la pena persistir. Sin cuentas, Nivel y Cierre mandan a crear una
 (aquí **no hay semillas**, a diferencia de las categorías) → [[patrimonio]]
 
-- **Nivel** — cuatro `Stat` (neto, disponible, Σ activos, Σ pasivos) y la lista de cuentas con su último
-  cierre. Todo en gris: aquí no hay flujo, solo saldo → [[design-system]]. Solo cuentas **no archivadas**.
+- **Nivel** — dónde estás y cómo has llegado. Ver abajo.
 - **Cierre mensual** — el ritual. Ver abajo.
 - **Cuentas** — CRUD calcado de `Categories` (reordenar, editar, archivar/activar). Las cuentas **se
   archivan, nunca se borran**, porque los cierres históricos las referencian.
+
+### Nivel y evolución
+
+Cuatro `Stat` de saldo (neto, disponible, Σ activos, Σ pasivos) **en gris**, un quinto de **Δ del último
+mes cerrado en verde/rojo** —el saldo es nivel, la variación es flujo → [[design-system]]—, la frase
+*"ahorraste X y el mercado puso Y"*, el gráfico de evolución y la lista de cuentas con su último cierre.
+
+- **Los cuatro `Stat` de saldo y las columnas solo miran las cuentas activas; la serie las recibe todas.**
+  Archivadas incluidas, o los meses viejos perderían las cuentas que entonces existían y la línea daría
+  un escalón el día que archivas una. Por eso `Level` recibe la lista completa y filtra dentro.
+- **El Δ del primer mes se pinta "—", no 0.** No haber podido medir no es no haber cambiado
+  (`monthDelta` devuelve `null`) → [[calculations]]. Un Δ de exactamente 0 sí existe, y va en gris.
+- **Badge "Mes incompleto"** cuando alguna cuenta tiene cierre en uno de los dos meses pero no en el otro:
+  queda fuera del reparto y hay que decirlo. Nunca la palabra "error".
+- **El gráfico va tras un `lazy()` + `Suspense` propios** (los de `Summary` viven en `App.tsx` y no se
+  comparten), apuntando al mismo `Charts.tsx` → [[charts]]. Con menos de dos meses en la serie no se
+  monta: no hay evolución que enseñar.
+- **El quinto `Stat` ocupa la fila entera** (`.stats > .stat:nth-child(5):last-child`): con la rejilla de
+  cuatro columnas se quedaba solo dejando tres huecos. La regla no toca al Resumen, que tiene cuatro.
 
 ### El ritual mensual
 

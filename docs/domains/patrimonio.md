@@ -5,11 +5,11 @@ up: "[[00-index]]"
 
 # Dominio: patrimonio
 
-> ⚠️ **Parcialmente implementado.** Funciona el MVP: cuentas, cierres mensuales, patrimonio neto y
-> disponible (fases F1a-F1b). Las decisiones grandes están extraídas en
-> [[009-la-foto-manda-cierre-mensual]]. **Siguen siendo diseño** la variación mensual con el reparto
-> ahorro/rentabilidad y su gráfico (secciones 5-6, fase F2), el descuadre "sin clasificar" (secciones 6-7,
-> F3) y la vinculación de movimientos a una cuenta (sección 8, F4).
+> ⚠️ **Parcialmente implementado.** Funcionan el MVP y la evolución: cuentas, cierres mensuales,
+> patrimonio neto, disponible, **Δ mensual con el reparto ahorro/rentabilidad y su gráfico** (fases
+> F1a-F1b-F2). Las decisiones grandes están extraídas en [[009-la-foto-manda-cierre-mensual]].
+> **Siguen siendo diseño** el descuadre "sin clasificar" (secciones 6-7, F3) y la vinculación de
+> movimientos a una cuenta (sección 8, F4).
 
 La app registraba **flujos**: gastos e ingresos con sus categorías, porcentajes y gráficos. No sabía
 **cuánto dinero existe** ni dónde está. Este dominio añade la dimensión que faltaba: **saldo**.
@@ -34,9 +34,9 @@ ahí la decisión de la sección 3.
 
 ## 2. Objetivos
 
-1. Saber el patrimonio neto actual ✅ y su evolución mensual (F2).
+1. Saber el patrimonio neto actual ✅ y su evolución mensual ✅.
 2. Saber cuánto dinero es disponible mañana sin vender nada ✅.
-3. Separar el **ahorro** de la **rentabilidad** en la variación del patrimonio (F2).
+3. Separar el **ahorro** de la **rentabilidad** en la variación del patrimonio ✅.
 4. Vincular los movimientos existentes a una cuenta, sin romper los agregados actuales (F4).
 
 ### No objetivos
@@ -147,13 +147,14 @@ flowchart TB
 |---|---|---|---|
 | **Patrimonio neto** | Σ activos − Σ pasivos | 1 | ✅ `netWorth()` |
 | **Disponible mañana** | Σ cuentas líquidas, con su signo | 2 | ✅ `available()` |
-| **Ahorro real** | Variación de las cuentas no de inversión + aportado a las de inversión | 3 | F2 |
-| **Rentabilidad del mes** | Saldo final − saldo inicial − aportado, en cada cuenta de inversión | 3 | F2 |
+| **Ahorro real** | Variación de las cuentas no de inversión + aportado a las de inversión | 3 | ✅ `monthDelta()` |
+| **Rentabilidad del mes** | Saldo final − saldo inicial − aportado, en cada cuenta de inversión | 3 | ✅ `investmentReturns()` |
 | **Descuadre** | Ahorro real − ahorro contable | (lo que hace fiable todo lo demás) | F3 |
 
-Las dos primeras viven en [[calculations]] y se muestran en gris, no en verde/rojo: son nivel, no flujo
-→ [[design-system]]. El dato de entrada del que salen —el aportado— **ya se captura** en el ritual, en
-cuentas de inversión y en pasivos, aunque las cifras que lo usan lleguen después.
+Todas viven en [[calculations]]. **El saldo se muestra en gris y la variación en verde/rojo**: el nivel no
+es flujo, el Δ sí → [[design-system]]. El Δ compara siempre contra el **mes anterior** —nunca contra el
+último mes disponible, que llamaría rentabilidad a varios meses de ahorro— y la serie del gráfico deja los
+meses sin cierre como **hueco**, porque interpolarlos inventaría rentabilidad que nadie ganó.
 
 ### Sobre la rentabilidad: euros, no porcentaje
 
@@ -169,7 +170,11 @@ afirmar es *"llevo un 8 % anual"*. Para eso hace falta XIRR, que es no objetivo 
 
 > **Δ patrimonio = ahorro + rentabilidad**
 
-Un ejemplo completo, porque explica el modelo entero mejor que cualquier definición. Mes de marzo:
+Se cumple **por construcción**: ahorro y rentabilidad son el mismo sumatorio `Σ (fin − inicio) · signo`
+partido en dos según de quién fuera el dinero, así que el reparto no puede descuadrar → [[calculations]]
+
+Un ejemplo completo, porque explica el modelo entero mejor que cualquier definición —y porque es el test
+que sostiene el módulo, en `calculations.test.ts`—. Mes de marzo:
 
 | Cuenta | Naturaleza | Cierre feb | Cierre mar | Aportado en mar |
 |---|---|---|---|---|
@@ -278,9 +283,10 @@ del diseño y no un detalle posterior. Está implementado en la subvista *Cierre
 - **Un cierre se vacía, no se borra**: el saldo pasa a `null`, que es un estado real ("no revisado") y no
   una ausencia. Por eso este dominio no necesita lápidas → [[009-la-foto-manda-cierre-mensual]]
 
-Pendiente de F2: **los meses sin cierre no se interpolan** en el gráfico —la serie tiene un hueco, porque
-interpolar inventaría rentabilidad que nadie ganó— y de F3, el **aviso discreto** si el mes anterior no
-tiene cierre (nada de notificaciones push).
+Ya aplicado: **los meses sin cierre no se interpolan** en el gráfico —la serie tiene un hueco, porque
+interpolar inventaría rentabilidad que nadie ganó— y un mes al que le falten cuentas sale del Δ con su
+aviso de "mes incompleto". Pendiente de F3: el **aviso discreto** si el mes anterior no tiene cierre (nada
+de notificaciones push).
 
 ## 11. Qué le exige este dominio al sync
 
@@ -301,16 +307,18 @@ principio → [[sync-model]]
 Verde y rojo están reservados en exclusiva a ingreso y gasto; todo lo demás es la escala de grises
 → [[design-system]]
 
-**El nivel (el saldo, el patrimonio) va en gris**, y eso ya está aplicado: el neto se pinta neutral aunque
-sea negativo, porque un pasivo no es un gasto.
+**El nivel (el saldo, el patrimonio) va en gris**: el neto se pinta neutral aunque sea negativo, porque un
+pasivo no es un gasto. **La variación (Δ) sí usa verde y rojo**, porque es un flujo con la misma semántica
+de "mejora" y "empeora".
 
-Sigue en propuesta la otra mitad: **que la variación (Δ) sí use verde y rojo** —es un flujo, con la misma
-semántica de "mejora" y "empeora"—. Es coherente con la regla actual en vez de romperla, pero **extiende su
-enunciado**, así que al implementarlo (F2) hay que actualizar la nota del sistema de diseño en el mismo PR.
+Las dos mitades están aplicadas, y juntas **extendieron el enunciado** de la regla de color: la frontera
+nunca fue ingreso/gasto contra el resto, sino **flujo contra nivel**. El enunciado completo vive ahora en
+[[design-system]], que es quien manda.
 
 Nota relacionada: un gráfico de barras apiladas por cuenta es tentador y no se recomienda. La rampa del
 proyecto solo distingue bien seis escalones, límite ya conocido y ya sufrido en el donut de categorías.
-Una línea de patrimonio neto y, si acaso, una separación activos / pasivos.
+De ahí que el gráfico sea **una sola línea** de patrimonio neto y, si acaso algún día, una separación
+activos / pasivos.
 
 ## 13. Riesgos
 
