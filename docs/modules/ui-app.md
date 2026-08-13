@@ -97,7 +97,10 @@ crear una segunda.
   vacías se pintan como guion, no como "0,00 €": en una rejilla de 8 columnas los ceros tapan los
   importes reales.
 - **`Movements`** — búsqueda por concepto/nota, filtro por tipo, orden por fecha descendente. Resolver
-  el nombre de la categoría cae a `'Sin categoría'`.
+  el nombre de la categoría cae a `'Sin categoría'`. La cuenta, cuando la hay, va como una **segunda
+  etiqueta en la misma celda** (`.tag.account`, en gris) y no como columna nueva: la tabla ya tiene seis
+  y por debajo de 760 px se reconstruye como tarjetas con áreas cableadas a esas seis. Sin cuenta no se
+  pinta nada — la mayoría de los movimientos no la tendrán nunca y un "Sin cuenta" sería solo ruido.
 - **`Categories`** — renombrar, archivar/activar, reordenar, añadir subcategoría (con `prompt()`) y la
   zona de peligro con "Borrar todo". → [[categorias]] · [[borrado-total]]
 - **`Patrimonio`** — cuentas, cierres mensuales, el nivel actual y su evolución, en tres subvistas. Ver
@@ -157,6 +160,9 @@ y, colgando, el desglose por cuenta.
 - **La nota va en un `<details>` nativo**, el primero del repo: el navegador ya trae el foco, el teclado y
   el anuncio hechos, y no hay estado que gestionar.
 - **No bloquea nada** y desaparece con el Δ (`unclassified` devuelve `null` cuando no hay mes anterior).
+- **El desglose por cuenta cuelga en un segundo `<details>`**, con su disclaimer: solo cuenta los
+  movimientos vinculados y un traspaso entre dos cuentas propias aparece en las dos con signos opuestos.
+  La suma sí cuadra con la cifra de arriba, y eso es lo que se promete → [[calculations]]
 
 #### El aviso de meses sin cerrar
 
@@ -215,6 +221,12 @@ son intencionados:
 
 Cierran con `Escape` y con clic en el backdrop (`onMouseDown` comparando `target === currentTarget`).
 Llevan `role="dialog"`, `aria-modal` y `aria-labelledby`.
+
+En `MovementModal`, el `<select>` de **Cuenta** repite el patrón del de categorías: las activas **más la
+archivada que ya tuviera el movimiento en edición**, o editar un movimiento viejo le cambiaría la cuenta
+sin querer al no encontrar su opción. Solo se pinta si hay cuentas: sin patrimonio configurado, un select
+con una única opción sería ruido. Cambiar de tipo resetea categoría y subcategoría pero **no** la cuenta,
+que no depende del tipo.
 
 `AccountModal` sirve para crear **y** para editar (`initial: Account | null`), a diferencia de
 `CategoryModal`: una cuenta tiene cuatro campos y el `prompt()` que basta para renombrar una categoría no

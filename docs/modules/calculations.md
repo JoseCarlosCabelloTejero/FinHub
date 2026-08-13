@@ -87,6 +87,7 @@ el riesgo 4 de [[patrimonio]] → [[periodos]]
 | `monthDelta(accounts, closings, month)` | `{ delta, realSavings, returns, complete }`, o `null` si no hay nada que comparar |
 | `investmentReturns(accounts, closings, month)` | Lo que puso el mercado en cada cuenta de inversión |
 | `unclassified(accounts, closings, movements, month)` | El descuadre del mes y sus piezas, o `null` si `monthDelta` no tiene con qué comparar |
+| `unclassifiedByAccount(accounts, closings, movements, month)` | El mismo descuadre repartido por cuenta, con una fila sentinel "Sin cuenta" |
 | `monthsWithoutClosing(closings, from)` | Los meses sin cierre desde `from` hacia atrás, ascendentes; `[]` si no hay histórico |
 
 Cinco reglas que sostienen estas funciones:
@@ -160,6 +161,31 @@ Tres decisiones que no son obvias:
 
 Devuelve las piezas (`realSavings`, `accountingSavings`, `liabilityContributed`) además del total, porque
 la UI explica la cifra en vez de soltarla → [[ui-app]]. Y `null`, no 0, cuando no hay mes anterior.
+
+### `unclassifiedByAccount`: el reparto
+
+Dice cuánto y (a medias) **dónde**, nunca *qué* movimiento falta. Su razón de ser es acotar la búsqueda:
+si sobran 300 €, saber en qué cuenta ayuda mucho.
+
+**El invariante que lo sostiene, y que tiene test: las filas suman exactamente `unclassified().amount`.**
+Un desglose que no cuadra con la cifra de arriba es peor que no tener desglose. De ahí tres consecuencias
+que parecen arbitrarias y no lo son:
+
+- Entra una fila por cada cuenta **comparable o con movimientos vinculados**; una cuenta sin ninguna de
+  las dos cosas no aporta nada y se omite.
+- La fila sentinel **"Sin cuenta"** (`accountId: null`) es `−ahorro contable de los movimientos sueltos`:
+  ese dinero está en el total global y tiene que aparecer en algún sitio.
+- Un `accountId` que ya no resuelve cae en esa misma fila, igual que hace `repairDanglingRefs` al subir.
+
+Los términos por cuenta (`savingsTerm` y `correctionTerm`) los comparten `monthDelta`, `unclassified` y
+`unclassifiedByAccount`. **No es factorización por gusto**: si cada uno recalculara la variación por su
+cuenta, el reparto dejaría de sumar el total. Es la misma razón por la que `monthDelta` e
+`investmentReturns` comparten `monthPairs`.
+
+El reparto es **parcial y así se presenta**: mientras solo una parte de los movimientos lleve cuenta es
+una ayuda de diagnóstico, y un traspaso entre cuentas propias —que el modelo no representa, sección 9 de
+[[patrimonio]]— sale negativo en la de origen y positivo en la de destino. Se cancelan en el total, que es
+lo que se publica.
 
 `monthsWithoutClosing` alimenta el aviso: camina hacia atrás desde `from` y para en el último mes cerrado.
 Devuelve `[]` sin ningún cierre con saldo —sin histórico no hay racha de la que avisar, y de paso es lo que

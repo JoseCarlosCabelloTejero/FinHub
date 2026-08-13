@@ -16,7 +16,7 @@ import type { Account, AccountNature, Category, Closing, Movement, MovementType,
 // se puede meter en el `payload: Record<string, unknown>` de OutboxOp.
 export type CategoryRow = { id: string; name: string; type: MovementType; order: number; archived: boolean; updated_at: string };
 export type SubcategoryRow = { id: string; category_id: string; name: string; order: number; archived: boolean; updated_at: string };
-export type MovementRow = { id: string; type: MovementType; amount: number; date: string; category_id: string; subcategory_id: string | null; concept: string; notes: string | null; created_at: string; updated_at: string };
+export type MovementRow = { id: string; type: MovementType; amount: number; date: string; category_id: string; subcategory_id: string | null; account_id: string | null; concept: string; notes: string | null; created_at: string; updated_at: string };
 export type AccountRow = { id: string; name: string; nature: AccountNature; is_investment: boolean; is_liquid: boolean; archived: boolean; order: number; updated_at: string };
 export type ClosingRow = { id: string; account_id: string; month: string; balance: number | null; contributed: number | null; note: string | null; updated_at: string };
 
@@ -29,10 +29,11 @@ export const toCategoryRow = (category: Category): CategoryRow => ({ id: categor
 export const fromCategoryRow = (row: CategoryRow): Omit<Category, 'subcategories'> => ({ id: row.id, name: row.name, type: row.type, order: row.order, archived: row.archived, updatedAt: row.updated_at });
 export const toSubRow = (categoryId: string, sub: Subcategory): SubcategoryRow => ({ id: sub.id, category_id: categoryId, name: sub.name, order: sub.order, archived: sub.archived, updated_at: sub.updatedAt });
 export const fromSubRow = (row: SubcategoryRow): Subcategory => ({ id: row.id, name: row.name, order: row.order, archived: row.archived, updatedAt: row.updated_at });
-// El select de subcategoría del modal usa value="" para "Sin subcategoría", y '' no es un id válido:
-// la FK lo rechazaría. Se mapea a null aquí, en el único sitio que conoce el esquema del servidor.
-export const toMovementRow = (movement: Movement): MovementRow => ({ id: movement.id, type: movement.type, amount: movement.amount, date: movement.date, category_id: movement.categoryId, subcategory_id: movement.subcategoryId || null, concept: movement.concept, notes: movement.notes || null, created_at: movement.createdAt, updated_at: movement.updatedAt });
-export const fromMovementRow = (row: MovementRow): Movement => ({ id: row.id, type: row.type, amount: row.amount, date: row.date, categoryId: row.category_id, ...(row.subcategory_id ? { subcategoryId: row.subcategory_id } : {}), concept: row.concept, ...(row.notes ? { notes: row.notes } : {}), createdAt: row.created_at, updatedAt: row.updated_at });
+// Los selects de subcategoría y de cuenta usan value="" para "Sin subcategoría" / "Sin cuenta", y ''
+// no es un id válido: las FK lo rechazarían (hay checks `<> ''` en el esquema por si acaso). Se mapean
+// a null aquí, en el único sitio que conoce el esquema del servidor.
+export const toMovementRow = (movement: Movement): MovementRow => ({ id: movement.id, type: movement.type, amount: movement.amount, date: movement.date, category_id: movement.categoryId, subcategory_id: movement.subcategoryId || null, account_id: movement.accountId || null, concept: movement.concept, notes: movement.notes || null, created_at: movement.createdAt, updated_at: movement.updatedAt });
+export const fromMovementRow = (row: MovementRow): Movement => ({ id: row.id, type: row.type, amount: row.amount, date: row.date, categoryId: row.category_id, ...(row.subcategory_id ? { subcategoryId: row.subcategory_id } : {}), ...(row.account_id ? { accountId: row.account_id } : {}), concept: row.concept, ...(row.notes ? { notes: row.notes } : {}), createdAt: row.created_at, updatedAt: row.updated_at });
 export const toAccountRow = (account: Account): AccountRow => ({ id: account.id, name: account.name, nature: account.nature, is_investment: account.isInvestment, is_liquid: account.isLiquid, archived: account.archived, order: account.order, updated_at: account.updatedAt });
 export const fromAccountRow = (row: AccountRow): Account => ({ id: row.id, name: row.name, nature: row.nature, isInvestment: row.is_investment, isLiquid: row.is_liquid, archived: row.archived, order: row.order, updatedAt: row.updated_at });
 // `contributed` es un número y 0 es un valor legítimo ("este mes no aporté, y lo sé"): el spread de
@@ -125,10 +126,15 @@ const recoveredCategory = (type: MovementType): Category => ({ id: `recuperados-
 // filas con un 23503, que el push trata como op irrecuperable: se perderían movimientos reales. Una
 // categoría por tipo y no una sola porque el modal filtra las categorías por el tipo del movimiento
 // (App.tsx), y con una sola de gasto los ingresos recuperados no se podrían ni reasignar a mano.
-export function repairDanglingRefs(movements: Movement[], categories: Category[]): { movements: Movement[]; categories: Category[] } {
+export function repairDanglingRefs(movements: Movement[], categories: Category[], accounts: Account[]): { movements: Movement[]; categories: Category[] } {
   const byId = new Map(categories.map((category) => [category.id, category]));
+  const accountIds = new Set(accounts.map((account) => account.id));
   const created = new Map<MovementType, Category>();
-  const repaired = movements.map((movement) => {
+  // Una cuenta que ya no existe se limpia y el movimiento se queda tal cual. Aquí no hace falta
+  // inventar una cuenta de recuperación como con las categorías, porque `accountId` es opcional de
+  // verdad: "sin cuenta" es un estado normal del modelo, no una avería.
+  const repaired = movements.map((original) => {
+    const movement = original.accountId && !accountIds.has(original.accountId) ? { ...original, accountId: undefined } : original;
     const category = byId.get(movement.categoryId);
     if (category) return movement.subcategoryId && !category.subcategories.some((sub) => sub.id === movement.subcategoryId) ? { ...movement, subcategoryId: undefined } : movement;
     const fallback = created.get(movement.type) ?? recoveredCategory(movement.type);
@@ -397,7 +403,7 @@ async function firstSync() {
 async function uploadEverything() {
   await bootstrapData();
   const local = await getAllData();
-  const repaired = { ...repairDanglingRefs(local.movements, local.categories), accounts: local.accounts, closings: local.closings };
+  const repaired = { ...repairDanglingRefs(local.movements, local.categories, local.accounts), accounts: local.accounts, closings: local.closings };
   await replaceLocalData(() => repaired);
   await prependOps(snapshotToOps(repaired));
 }
@@ -414,7 +420,10 @@ async function mergeWithServer(snapshot: Snapshot, key: string) {
   const remoteAccounts = new Set(snapshot.accounts.map((account) => account.id));
   const known = [...snapshot.categories, ...local.categories.filter((category) => !remoteCategories.has(category.id))];
   const knownIds = new Set(known.map((category) => category.id));
-  const repaired = repairDanglingRefs(local.movements, known);
+  // Las cuentas válidas son la UNIÓN de las dos puntas: las locales se suben en este mismo merge y las
+  // remotas ya están arriba, así que un movimiento puede referenciar cualquiera de las dos sin romper
+  // la FK. Pasar solo las locales limpiaría cuentas perfectamente vivas.
+  const repaired = repairDanglingRefs(local.movements, known, [...snapshot.accounts, ...local.accounts]);
   // Las categorías locales más las que la reparación haya tenido que inventar. Las que solo están en
   // el servidor no se tocan: ya están donde tienen que estar.
   const candidates = [...local.categories, ...repaired.categories.filter((category) => !knownIds.has(category.id))];

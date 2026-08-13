@@ -5,11 +5,10 @@ up: "[[00-index]]"
 
 # Dominio: patrimonio
 
-> ⚠️ **Parcialmente implementado.** Funcionan el MVP, la evolución y el descuadre: cuentas, cierres
-> mensuales, patrimonio neto, disponible, **Δ mensual con el reparto ahorro/rentabilidad y su gráfico**
-> y el **"sin clasificar"** con su aviso (fases F1a-F1b-F2-F3). Las decisiones grandes están extraídas
-> en [[009-la-foto-manda-cierre-mensual]]. **Sigue siendo diseño** la vinculación de movimientos a una
-> cuenta (sección 8, F4).
+> **Implementado por completo** en cinco fases: cuentas y cierres mensuales, patrimonio neto y
+> disponible, Δ mensual con el reparto ahorro/rentabilidad y su gráfico, el "sin clasificar" con su
+> aviso, y la vinculación de movimientos a una cuenta. Las decisiones grandes están extraídas en
+> [[009-la-foto-manda-cierre-mensual]].
 
 La app registraba **flujos**: gastos e ingresos con sus categorías, porcentajes y gráficos. No sabía
 **cuánto dinero existe** ni dónde está. Este dominio añade la dimensión que faltaba: **saldo**.
@@ -37,7 +36,7 @@ ahí la decisión de la sección 3.
 1. Saber el patrimonio neto actual ✅ y su evolución mensual ✅.
 2. Saber cuánto dinero es disponible mañana sin vender nada ✅.
 3. Separar el **ahorro** de la **rentabilidad** en la variación del patrimonio ✅.
-4. Vincular los movimientos existentes a una cuenta, sin romper los agregados actuales (F4).
+4. Vincular los movimientos existentes a una cuenta, sin romper los agregados actuales ✅.
 
 ### No objetivos
 
@@ -235,7 +234,7 @@ De ahí tres reglas de diseño, y las tres están aplicadas:
 
 ## 8. Movimientos y cuentas (objetivo 4)
 
-Un movimiento gana una referencia **opcional** a una cuenta. Opcional no es pereza: es lo único que no
+Un movimiento tiene una referencia **opcional** a una cuenta. Opcional no es pereza: es lo único que no
 huérfana los movimientos que ya existen, que nacieron sin cuenta y seguirán sin ella. Es el mismo patrón
 que `subcategoryId` —y arrastra la misma trampa: la cadena vacía del `<select>` se mapea a nulo antes de
 subir, porque la clave ajena rechaza el `''` → [[movimientos]] · [[sync]]
@@ -245,11 +244,18 @@ cuenta. La compatibilidad con los agregados de hoy es por construcción, no por 
 cumple el objetivo 4.
 
 ¿Para qué sirve entonces la vinculación? Para **localizar** el descuadre. Si sobran 300 €, saber en qué
-cuenta reduce mucho la búsqueda del movimiento que falta.
+cuenta reduce mucho la búsqueda del movimiento que falta. Lo hace `unclassifiedByAccount()`, con una fila
+por cuenta más una **"Sin cuenta"** para lo que no está vinculado → [[calculations]]
 
 Consecuencia asumida: mientras solo una parte de los movimientos lleve cuenta, la explicación por cuenta
 es **parcial**. El descuadre global sigue siendo exacto; el reparto por cuenta, no. Es aceptable porque el
-reparto es una ayuda de diagnóstico, no una cifra que se publique.
+reparto es una ayuda de diagnóstico, no una cifra que se publique — y se presenta como tal, con su
+disclaimer, en el desglose plegable de la subvista *Nivel* → [[ui-app]]
+
+Lo que sí se garantiza es que **las filas suman exactamente el descuadre global**: un desglose que no
+cuadra con la cifra de arriba es peor que no tener desglose. De ahí que un movimiento cuya cuenta ya no
+existe caiga en la fila "Sin cuenta" en vez de desaparecer del reparto, igual que hace `repairDanglingRefs`
+al subir.
 
 ## 9. Transferencias entre cuentas propias: no se modelan
 

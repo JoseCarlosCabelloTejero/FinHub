@@ -86,25 +86,36 @@ describe('assembleCategories', () => {
 
 describe('repairDanglingRefs', () => {
   const categories = [cat('c1', { subcategories: [sub('s1')] })];
+  const accounts = [acc('a1')];
 
   it('reasigna a una categoría de recuperación del mismo tipo', () => {
-    const repaired = repairDanglingRefs([mov('m1', { type: 'income', categoryId: 'borrada' })], categories);
+    const repaired = repairDanglingRefs([mov('m1', { type: 'income', categoryId: 'borrada' })], categories, accounts);
     expect(repaired.movements[0].categoryId).toBe('recuperados-income');
     expect(repaired.categories.find((c) => c.id === 'recuperados-income')).toMatchObject({ type: 'income', archived: true });
   });
 
-  it('limpia la subcategoría que no pertenece a su categoría', () => expect(repairDanglingRefs([mov('m1', { subcategoryId: 'otra' })], categories).movements[0].subcategoryId).toBeUndefined());
+  it('limpia la subcategoría que no pertenece a su categoría', () => expect(repairDanglingRefs([mov('m1', { subcategoryId: 'otra' })], categories, accounts).movements[0].subcategoryId).toBeUndefined());
+
+  // Sin cuenta de recuperación, a diferencia de las categorías: "sin cuenta" es un estado normal del
+  // modelo. Lo que no puede pasar es perder el movimiento, que es dinero real del usuario.
+  it('limpia la cuenta que ya no existe sin perder el movimiento', () => {
+    const repaired = repairDanglingRefs([mov('m1', { accountId: 'fantasma' })], categories, accounts);
+    expect(repaired.movements).toHaveLength(1);
+    expect(repaired.movements[0].accountId).toBeUndefined();
+  });
+
+  it('respeta la cuenta que sí existe', () => expect(repairDanglingRefs([mov('m1', { accountId: 'a1' })], categories, accounts).movements[0].accountId).toBe('a1'));
 
   it('no toca nada cuando las referencias son válidas', () => {
-    const movements = [mov('m1', { subcategoryId: 's1' })];
-    const repaired = repairDanglingRefs(movements, categories);
+    const movements = [mov('m1', { subcategoryId: 's1', accountId: 'a1' })];
+    const repaired = repairDanglingRefs(movements, categories, accounts);
     expect(repaired.movements).toEqual(movements);
     expect(repaired.categories).toBe(categories);
   });
 
   it('es idempotente', () => {
-    const once = repairDanglingRefs([mov('m1', { categoryId: 'borrada' })], categories);
-    const twice = repairDanglingRefs(once.movements, once.categories);
+    const once = repairDanglingRefs([mov('m1', { categoryId: 'borrada', accountId: 'fantasma' })], categories, accounts);
+    const twice = repairDanglingRefs(once.movements, once.categories, accounts);
     expect(twice.movements).toEqual(once.movements);
     expect(twice.categories).toHaveLength(once.categories.length);
   });
@@ -158,6 +169,9 @@ describe('mapeo de filas', () => {
   it('las notas vacías viajan como null', () => expect(toMovementRow(mov('m1', { notes: '' })).notes).toBeNull());
   it('el importe se mantiene numérico en el viaje de vuelta', () => expect(fromMovementRow(toMovementRow(mov('m1', { amount: 12.34 }))).amount).toBe(12.34));
   it('un movimiento sin subcategoría vuelve sin la clave', () => expect(fromMovementRow(toMovementRow(mov('m1'))).subcategoryId).toBeUndefined());
+  it('la cuenta vacía del formulario viaja como null', () => expect(toMovementRow(mov('m1', { accountId: '' })).account_id).toBeNull());
+  it('un movimiento sin cuenta vuelve sin la clave', () => expect(fromMovementRow(toMovementRow(mov('m1'))).accountId).toBeUndefined());
+  it('la cuenta sobrevive al viaje de ida y vuelta', () => expect(fromMovementRow(toMovementRow(mov('m1', { accountId: 'a1' })))).toEqual(mov('m1', { accountId: 'a1' })));
   it('la cuenta no pierde sus flags en el viaje de ida y vuelta', () => { const account = acc('a1', { nature: 'liability', isInvestment: true, isLiquid: false }); expect(fromAccountRow(toAccountRow(account))).toEqual(account); });
   it('un cierre vaciado conserva el balance null', () => expect(fromClosingRow(toClosingRow(cierre('a1', { balance: null }))).balance).toBeNull());
   it('un aportado a cero no se pierde en el viaje de vuelta', () => expect(fromClosingRow(toClosingRow(cierre('a1', { contributed: 0 }))).contributed).toBe(0));
@@ -398,9 +412,26 @@ describe('motor de sync', () => {
       await sync.syncNow();
       const tables = pushedTables();
       expect(tables.indexOf('account_closings')).toBeGreaterThan(tables.lastIndexOf('accounts'));
-      // Y delante de todo lo demás: cuando la fase 4 escriba movements.account_id, este orden ya
-      // garantiza que la cuenta llega antes que el movimiento que la referencia.
       expect(tables.indexOf('categories')).toBeGreaterThan(tables.lastIndexOf('account_closings'));
+    });
+
+    // El test que sostiene la fase: un 23503 en el push se trata como irrecuperable y descarta la op,
+    // así que un movimiento que llegara antes que su cuenta se perdería para siempre.
+    it('la cuenta se sube antes que el movimiento que la referencia', async () => {
+      await db.saveAccount(acc('a1'));
+      await db.saveMovement(mov('m1', { categoryId: 'income', accountId: 'a1' }));
+      await sync.syncNow();
+      const ids = pushedIds();
+      expect(ids.indexOf('a1')).toBeGreaterThanOrEqual(0);
+      expect(ids.indexOf('a1')).toBeLessThan(ids.indexOf('m1'));
+      expect(mocks.upsert.mock.calls.find((call) => (call[1] as { id: string }).id === 'm1')?.[1]).toMatchObject({ account_id: 'a1' });
+    });
+
+    it('un movimiento con una cuenta que ya no existe se sube sin ella, no se descarta', async () => {
+      await db.saveMovement(mov('m1', { categoryId: 'income', accountId: 'fantasma' }));
+      await sync.syncNow();
+      expect(pushedIds()).toContain('m1');
+      expect(mocks.upsert.mock.calls.find((call) => (call[1] as { id: string }).id === 'm1')?.[1]).toMatchObject({ account_id: null });
     });
 
     it('un cierre cuya cuenta no existe se omite en vez de estrellarse contra la FK', async () => {
