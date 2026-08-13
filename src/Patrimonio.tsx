@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarClock, ChevronDown, ChevronUp, Landmark, Pencil, Scale, TrendingDown, TrendingUp, Wallet, X } from 'lucide-react';
-import { available, closingId, currentMonth, latestClosings, money, monthCompleteness, monthDelta, monthLabel, monthsWithoutClosing, netWorth, netWorthSeries, parseAmount, previousMonth, shiftMonth, unclassified } from './calculations';
+import { available, closingId, currentMonth, latestClosings, money, monthCompleteness, monthDelta, monthLabel, monthsWithoutClosing, netWorth, netWorthSeries, parseAmount, previousMonth, shiftMonth, unclassified, unclassifiedByAccount } from './calculations';
 import { saveAccountSynced, saveClosingSynced } from './sync';
 import { Empty, Stat } from './Ui';
 import type { Account, AccountNature, Closing, Movement } from './types';
@@ -48,6 +48,7 @@ function Level({accounts,closings,movements,onGoToClosing}:{accounts:Account[];c
   const month=series.at(-1)?.month;
   const delta=useMemo(()=>month?monthDelta(accounts,closings,month):null,[accounts,closings,month]);
   const gap=useMemo(()=>month?unclassified(accounts,closings,movements,month):null,[accounts,closings,movements,month]);
+  const split=useMemo(()=>month?unclassifiedByAccount(accounts,closings,movements,month):null,[accounts,closings,movements,month]);
   // Desde el mes ANTERIOR al actual: el mes en curso todavía no toca cerrarlo, y avisar de él daría
   // la lata desde el día 1.
   const pending=useMemo(()=>monthsWithoutClosing(closings,previousMonth(currentMonth())),[closings]);
@@ -82,7 +83,14 @@ function Level({accounts,closings,movements,onGoToClosing}:{accounts:Account[];c
       <p>No es un error ni hay nada que arreglar: es la parte del cambio de tus saldos que tus movimientos no cuentan. Casi siempre es un gasto que se te olvidó registrar —o un préstamo.</p>
       <p>Con una hipoteca aparece todos los meses: pagas 400 € de cuota y contablemente son 400 € de gasto, pero quizá 100 fueron intereses y 300 bajaron la deuda, que es ahorro. Si quieres que cuadre, teclea esos 300 en <b>Principal amortizado</b> al cerrar el mes; si no, se lee sabiendo de dónde viene.</p>
       <p>Si lo que falta es un gasto, regístralo tú con su categoría. FinHub nunca lo inventará: un movimiento de ajuste automático falsearía tus categorías y tus gráficos.</p>
-    </details></section>}
+    </details>
+    {/* El reparto por cuenta dice cuánto y (a medias) dónde, nunca qué movimiento falta. Es parcial
+        mientras no todos los movimientos lleven cuenta, y un traspaso entre cuentas propias —que el
+        modelo no representa— sale negativo en el origen y positivo en el destino. El total sí es exacto. */}
+    {split&&split.length>0&&<details><summary>Desglose por cuenta</summary>
+      <p>Ayuda a acotar la búsqueda, no es una cifra publicable: solo cuenta los movimientos que llevan cuenta, y un traspaso entre dos cuentas tuyas aparece en las dos con signos opuestos. La suma sí cuadra con la cifra de arriba.</p>
+      <ul className="unclassified-split">{split.map(row=><li key={row.accountId??'--none'}><span>{row.name}</span><b>{signed(row.amount)}</b></li>)}</ul>
+    </details>}</section>}
   {series.length>1&&<Suspense fallback={<div className="chart-loading">Dibujando gráficos…</div>}><section className="charts"><article className="chart wide"><h2>Evolución del patrimonio</h2><p>Un punto por mes cerrado; los meses sin cierre quedan como hueco</p><NetWorthChart data={series}/></article></section></Suspense>}
   <section className="category-columns">{column('Activos',assets)}{column('Pasivos',liabilities)}</section></>;
 }

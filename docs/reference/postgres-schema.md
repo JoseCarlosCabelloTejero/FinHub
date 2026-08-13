@@ -48,7 +48,7 @@ erDiagram
 |---|---|
 | `categories` | `check type in ('income','expense')` · `"order"` entrecomillado (palabra reservada) |
 | `subcategories` | Normalizadas aquí, embebidas en el cliente → [[007-subcategorias-normalizadas-en-servidor]] |
-| `movements` | `numeric(12,2)`, `check amount >= 0`, checks de formato ISO en `date`/`created_at`/`updated_at` · `account_id` nullable (fase 4 de [[patrimonio]]; la columna nace con el esquema para no re-migrar) |
+| `movements` | `numeric(12,2)`, `check amount >= 0`, checks de formato ISO en `date`/`created_at`/`updated_at` · `account_id` **nullable de verdad** ("sin cuenta" es un estado normal, no una avería) → [[patrimonio]] §8 |
 | `accounts` | `check nature in ('asset','liability')` · se archivan, nunca se borran (sin DELETE) |
 | `account_closings` | Grano `(cuenta, mes)` con **id determinista** `account_id:month`, blindado con `check (id = account_id \|\| ':' \|\| month)` · `balance` nullable (`null` = "no revisado") y `>= 0` cuando no lo es · `contributed` **sin check de signo** (una retirada es un aportado negativo) → [[009-la-foto-manda-cierre-mensual]] |
 

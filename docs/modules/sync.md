@@ -39,8 +39,10 @@ tocan IndexedDB, la red o el estado del módulo.
 subcategorías embebidas) y las filas del servidor (snake_case, normalizadas). Tres reglas:
 
 - **Nunca se manda `user_id`**: la columna tiene `DEFAULT auth.uid()`.
-- `subcategoryId: ''` (el "Sin subcategoría" del `<select>`) viaja como `null`. Es el único sitio que
-  conoce el esquema del servidor, así que la traducción vive aquí.
+- `subcategoryId: ''` y `accountId: ''` (los "Sin subcategoría" / "Sin cuenta" de los `<select>`)
+  viajan como `null`, y vuelven con spread condicional para no dejar la clave puesta a vacío. Las FK
+  rechazarían la cadena vacía (hay checks `<> ''` por si acaso). Es el único sitio que conoce el
+  esquema del servidor, así que la traducción vive aquí.
 - `amount` es `number` en los dos lados: PostgREST serializa `numeric` con `to_json`, así que llega
   como número JSON. **No hacer `parseFloat`.**
 - En `ClosingRow`, ojo con la diferencia: `balance: null` es **un estado real** ("mes no revisado", va
@@ -65,16 +67,25 @@ todo el árbol), pero en Postgres cada categoría y cada subcategoría son filas
 - Una subcategoría que desaparezca de `next` se ignora: la UI archiva y nunca borra, y el servidor no
   concede `DELETE` sobre `subcategories`.
 
-## `repairDanglingRefs(movements, categories)`
+## `repairDanglingRefs(movements, categories, accounts)`
 
-En IndexedDB `categoryId`/`subcategoryId` son strings **sin integridad referencial**; en Postgres hay
-FK de verdad, que rechazarían esas filas con un `23503` — y el push trata las violaciones de
-integridad como **irrecuperables**, así que se perderían movimientos reales.
+En IndexedDB `categoryId`/`subcategoryId`/`accountId` son strings **sin integridad referencial**; en
+Postgres hay FK de verdad, que rechazarían esas filas con un `23503` — y el push trata las violaciones
+de integridad como **irrecuperables**, así que se perderían movimientos reales.
 
 La reparación crea una categoría archivada `Recuperados` **por tipo** (no una sola) porque el modal
 filtra las categorías por el tipo del movimiento: con una sola de gasto, los ingresos recuperados no
 se podrían ni reasignar a mano. Nace con sello de época, así que el LWW no la deja pisar nada.
 Es **idempotente**.
+
+Con las cuentas el trato es distinto y más simple: una cuenta colgante **se limpia y el movimiento se
+queda**, sin inventar ninguna cuenta de recuperación. `accountId` es opcional de verdad —"sin cuenta"
+es un estado normal del modelo, no una avería—, así que no hay nada que reconstruir. Lo que no puede
+pasar es perder el movimiento, que es dinero real → [[patrimonio]] §8
+
+Ojo al conjunto de cuentas que se le pasa: en `mergeWithServer` es la **unión** de las locales y las
+del snapshot. Las locales se suben en ese mismo merge y las remotas ya están arriba, así que las dos
+son referenciables; pasar solo las locales limpiaría cuentas perfectamente vivas.
 
 ## `applyPullToLocal(snapshot, pending)`
 
@@ -145,10 +156,11 @@ el sondeo de cada minuto repintaría los gráficos y remontaría la tabla sin qu
 cuentas es un estado normal). → [[pull]]
 
 En `snapshotToOps` (la subida de un snapshot entero), el orden causal es **cuentas → cierres →
-categorías → subcategorías → movimientos**: los cierres dependen de su cuenta por FK hoy, y los
-movimientos lo harán cuando la fase 4 de [[patrimonio]] escriba `account_id`. Un cierre cuya cuenta no
-viaje en el snapshot **se omite** (el análogo barato de `repairDanglingRefs`, sin inventar cuentas de
-recuperación). Y en `mergeWithServer`, un cierre se sube **siempre** aunque el servidor ya tenga su id:
+categorías → subcategorías → movimientos**: los cierres y los movimientos dependen de su cuenta por FK,
+así que la cuenta tiene que llegar antes. Es el invariante con el test más importante de la fase 4, y
+no por gusto: un `23503` en el push es irrecuperable y **descartaría el movimiento para siempre**. Un
+cierre cuya cuenta no viaje en el snapshot **se omite** (el análogo barato de `repairDanglingRefs`, sin
+inventar cuentas de recuperación); un movimiento, en cambio, viaja sin cuenta antes que perderse. Y en `mergeWithServer`, un cierre se sube **siempre** aunque el servidor ya tenga su id:
 el id determinista `cuenta:mes` puede chocar de verdad (misma fila lógica) y ahí debe decidir el LWW,
 no el cliente.
 

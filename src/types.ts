@@ -28,6 +28,11 @@ export interface Movement {
   date: string;
   categoryId: string;
   subcategoryId?: string;
+  // De qué cuenta salió o entró el dinero. Opcional de verdad, y no por pereza: es lo único que no
+  // huérfana los movimientos que ya existen, que nacieron sin cuenta y seguirán sin ella. Ningún
+  // agregado de flujo la mira (summary, weeklyBreakdown, categoryData, trendData); sirve para
+  // localizar el descuadre, no para calcularlo.
+  accountId?: string;
   concept: string;
   notes?: string;
   createdAt: string;

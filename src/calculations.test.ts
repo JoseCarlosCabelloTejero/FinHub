@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { available, closingId, closingsByMonth, filterPeriod, investmentReturns, latestClosings, monthCompleteness, monthDelta, monthsWithoutClosing, netWorth, netWorthSeries, parseAmount, previousMonth, shiftMonth, summary, topCategories, unclassified, weeklyBreakdown, weekOfMonth, weeksInMonth } from './calculations';
+import { available, closingId, closingsByMonth, filterPeriod, investmentReturns, latestClosings, monthCompleteness, monthDelta, monthsWithoutClosing, netWorth, netWorthSeries, parseAmount, previousMonth, shiftMonth, summary, topCategories, unclassified, unclassifiedByAccount, weeklyBreakdown, weekOfMonth, weeksInMonth } from './calculations';
 import { EPOCH_UPDATED_AT } from './data';
 import type { Account, Category, Closing, Movement } from './types';
 const movement=(type:'income'|'expense',amount:number,date='2026-04-10',categoryId='x',subcategoryId?:string):Movement=>({id:crypto.randomUUID(),type,amount,date,categoryId,subcategoryId,concept:'Test',createdAt:'',updatedAt:''});
+const inAccount=(accountId:string,m:Movement):Movement=>({...m,accountId});
 describe('cálculos financieros',()=>{it('calcula ingresos, gastos, ahorro y tasa',()=>{expect(summary([movement('income',2000),movement('expense',500)])).toEqual({income:2000,expenses:500,savings:1500,rate:75})});it('evita dividir entre cero',()=>expect(summary([movement('expense',20)]).rate).toBe(0));it('filtra por mes',()=>expect(filterPeriod([movement('income',1),movement('income',1,'2026-05-01')],'2026-04-01','month')).toHaveLength(1));it('filtra por año',()=>expect(filterPeriod([movement('income',1),movement('income',1,'2025-05-01')],'2026-04-01','year')).toHaveLength(1))});
 describe('topCategories',()=>{
   const list=(n:number)=>Array.from({length:n},(_,i)=>({categoryId:`c${i}`,name:`C${i}`,value:n-i}));
@@ -139,6 +140,42 @@ describe('sin clasificar',()=>{
   // Una cuenta que no entra en el ahorro real tampoco puede corregirlo: su principal metería una
   // corrección fantasma que descuadraría la cifra en la dirección contraria.
   it('no corrige con el principal de un pasivo que no está en los dos meses',()=>expect(unclassified(ejemplo,[closing('corriente','2026-02',10000),closing('corriente','2026-03',9500),closing('hipoteca','2026-03',99700,300)],[],'2026-03')).toMatchObject({amount:-500,liabilityContributed:0}));
+});
+
+describe('sin clasificar por cuenta',()=>{
+  const movimientos=[movement('income',2000,'2026-03-05'),movement('expense',1100,'2026-03-12'),movement('expense',400,'2026-03-28')];
+  const cierres=[...febrero,...marzo];
+  const reparto=(items:Movement[])=>unclassifiedByAccount(ejemplo,cierres,items,'2026-03')!;
+  const suma=(items:Movement[])=>reparto(items).reduce((n,r)=>n+r.amount,0);
+
+  // El invariante de la fase: el global sigue siendo exacto, y el reparto tiene que sumarlo. Sin esto,
+  // un desglose que no cuadra con la cifra de arriba es peor que no tener desglose.
+  it('las filas suman exactamente el descuadre global',()=>expect(suma(movimientos)).toBe(unclassified(ejemplo,cierres,movimientos,'2026-03')!.amount));
+  it('sigue sumándolo con los movimientos ya vinculados',()=>{const items=[inAccount('corriente',movimientos[0]),inAccount('corriente',movimientos[1]),inAccount('hipoteca',movimientos[2])];expect(suma(items)).toBe(unclassified(ejemplo,cierres,items,'2026-03')!.amount)});
+
+  // Sin vincular nada, todo el flujo contable cae en la fila sentinel: ese dinero está en el total y
+  // tiene que verse en algún sitio, aunque todavía no se sepa de qué cuenta salió.
+  it('mete en "Sin cuenta" los movimientos sin vincular',()=>expect(reparto(movimientos).find(r=>r.accountId===null)).toEqual({accountId:null,name:'Sin cuenta',realSavings:0,accountingSavings:500,amount:-500}));
+  it('no inventa la fila "Sin cuenta" cuando todo está vinculado',()=>expect(reparto(movimientos.map(m=>inAccount('corriente',m))).some(r=>r.accountId===null)).toBe(false));
+  it('trata como suelto un movimiento cuya cuenta ya no existe',()=>expect(reparto([inAccount('borrada',movimientos[0])]).find(r=>r.accountId===null)?.accountingSavings).toBe(2000));
+
+  it('atribuye a la corriente su variación y sus movimientos',()=>expect(reparto([inAccount('corriente',movimientos[0]),inAccount('corriente',movimientos[1])]).find(r=>r.accountId==='corriente')).toEqual({accountId:'corriente',name:'corriente',realSavings:-500,accountingSavings:900,amount:-1400}));
+  // El principal amortizado corrige también aquí: la hipoteca aporta +300 de ahorro real y su fila lo
+  // descuenta, igual que hace el global.
+  it('descuenta el principal amortizado en la fila del pasivo',()=>{const cierresConPrincipal=[...febrero,closing('corriente','2026-03',9500),closing('broker','2026-03',6200,1000),closing('hipoteca','2026-03',99700,300)];expect(unclassifiedByAccount(ejemplo,cierresConPrincipal,[],'2026-03')!.find(r=>r.accountId==='hipoteca')!.realSavings).toBe(0)});
+
+  // Un traspaso no está modelado: sale de una cuenta y entra en otra, y si se registra en las dos puntas
+  // ensucia el reparto con dos filas que se cancelan. El total, que es lo que se publica, no se entera.
+  it('un traspaso vinculado en las dos puntas se cancela en el total',()=>{
+    const traspaso=[inAccount('corriente',movement('expense',1000,'2026-03-15')),inAccount('broker',movement('income',1000,'2026-03-15'))];
+    const filas=reparto(traspaso);
+    expect(filas.find(r=>r.accountId==='corriente')!.accountingSavings).toBe(-1000);
+    expect(filas.find(r=>r.accountId==='broker')!.accountingSavings).toBe(1000);
+    expect(suma(traspaso)).toBe(unclassified(ejemplo,cierres,traspaso,'2026-03')!.amount);
+  });
+
+  it('omite la cuenta que no entra en el reparto ni tiene movimientos',()=>expect(unclassifiedByAccount([...ejemplo,account('vieja')],cierres,[],'2026-03')!.map(r=>r.accountId)).toEqual(['corriente','broker','hipoteca']));
+  it('devuelve null sin mes anterior con el que comparar',()=>expect(unclassifiedByAccount(ejemplo,marzo,movimientos,'2026-03')).toBeNull());
 });
 
 describe('meses sin cerrar',()=>{

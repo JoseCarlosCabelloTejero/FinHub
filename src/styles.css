@@ -473,6 +473,10 @@ td small { display: block; color: var(--muted); margin-top: 3px }
   font-size: 11px;
 }
 
+/* La cuenta va detrás de la categoría en la misma celda, y un punto por debajo: es contexto, no la
+   clasificación del movimiento. */
+.tag.account { margin-left: 5px; background: transparent; color: var(--muted) }
+
 .amount { text-align: right; font-variant-numeric: tabular-nums }
 .amount.income { color: var(--income); font-weight: 700 }
 .amount.expense { color: var(--expense); font-weight: 700 }
@@ -803,6 +807,16 @@ td small { display: block; color: var(--muted); margin-top: 3px }
 .unclassified details { margin-top: 13px; border-top: 1px solid var(--line); padding-top: 11px }
 .unclassified summary { color: var(--text-2); font-size: 13px; cursor: pointer }
 .unclassified details p:first-of-type { margin-top: 9px }
+.unclassified-split { list-style: none; margin-top: 11px; font-size: 13px }
+.unclassified-split li {
+  display: flex;
+  justify-content: space-between;
+  gap: 13px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  color: var(--text-2);
+}
+.unclassified-split b { color: var(--text); font-variant-numeric: tabular-nums }
 /* Aviso de meses sin cerrar. Mismo gris que el resto: no bloquea nada y no debe leerse como un fallo. */
 .closing-nudge {
   display: flex;
