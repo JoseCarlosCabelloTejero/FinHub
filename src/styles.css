@@ -784,6 +784,45 @@ td small { display: block; color: var(--muted); margin-top: 3px }
 .closing-foot span { color: var(--muted); font-size: 12px; display: block }
 .closing-foot strong { font-size: 19px }
 .closing-foot small { color: var(--muted); font-size: 12px }
+/* El "sin clasificar" no es un KPI más: lleva explicación y desglose colgando, y como sexta tarjeta
+   dejaría dos huecos y le quitaría al Δ el ancho completo de `.stats > .stat:nth-child(5)`. */
+.unclassified {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+.unclassified > span { color: var(--muted); font-size: 13px; display: block }
+/* En gris incluso siendo la diferencia entre dos flujos: es un aviso, no una mejora ni un empeoramiento,
+   y verde y rojo están reservados a ingreso y gasto. */
+.unclassified > strong { font-size: 26px; color: var(--text); letter-spacing: -.04em }
+.unclassified p { color: var(--muted); font-size: 13px; margin-top: 5px }
+.unclassified p b { color: var(--text-2) }
+/* Plegado nativo en vez de un useState: el navegador ya trae el foco, el teclado y el anuncio hechos. */
+.unclassified details { margin-top: 13px; border-top: 1px solid var(--line); padding-top: 11px }
+.unclassified summary { color: var(--text-2); font-size: 13px; cursor: pointer }
+.unclassified details p:first-of-type { margin-top: 9px }
+/* Aviso de meses sin cerrar. Mismo gris que el resto: no bloquea nada y no debe leerse como un fallo. */
+.closing-nudge {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 13px 16px;
+  margin-bottom: 16px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.closing-nudge svg { width: 18px; flex-shrink: 0; color: var(--muted) }
+.closing-nudge p { flex: 1 }
+.closing-nudge button { font-size: 13px; padding: 8px 13px; white-space: nowrap }
+@media (max-width: 620px) {
+  .closing-nudge { flex-wrap: wrap }
+  .closing-nudge p { flex-basis: 100% }
+}
 /* Los botones del selector Activo/Pasivo heredarían los 12px de `.field`. */
 .field .segmented { font-size: 14px; justify-self: start }
 .checks { display: grid; gap: 7px; margin: 18px 0 }

@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Landmark, Pencil, Scale, TrendingDown, TrendingUp, Wallet, X } from 'lucide-react';
-import { available, closingId, currentMonth, latestClosings, money, monthCompleteness, monthDelta, monthLabel, netWorth, netWorthSeries, parseAmount, previousMonth, shiftMonth } from './calculations';
+import { CalendarClock, ChevronDown, ChevronUp, Landmark, Pencil, Scale, TrendingDown, TrendingUp, Wallet, X } from 'lucide-react';
+import { available, closingId, currentMonth, latestClosings, money, monthCompleteness, monthDelta, monthLabel, monthsWithoutClosing, netWorth, netWorthSeries, parseAmount, previousMonth, shiftMonth, unclassified } from './calculations';
 import { saveAccountSynced, saveClosingSynced } from './sync';
 import { Empty, Stat } from './Ui';
-import type { Account, AccountNature, Closing } from './types';
+import type { Account, AccountNature, Closing, Movement } from './types';
 // Cuarto gráfico del bundle diferido: recharts sigue fuera de la carga inicial, y meterlo en Charts.tsx
 // en vez de en un fichero propio evita un chunk más.
 const NetWorthChart = lazy(() => import('./Charts').then(m=>({default:m.NetWorthChart})));
@@ -15,22 +15,29 @@ const views = [['level','Nivel'],['closing','Cierre mensual'],['accounts','Cuent
 const asksContributed = (account: Account) => account.isInvestment || account.nature === 'liability';
 const byOrder = (a: Account, b: Account) => a.order - b.order;
 
-export default function Patrimonio({accounts,closings,reload,onNotice}:{accounts:Account[];closings:Closing[];reload:()=>Promise<void>;onNotice:(s:string)=>void}){
+export default function Patrimonio({accounts,closings,movements,reload,onNotice}:{accounts:Account[];closings:Closing[];movements:Movement[];reload:()=>Promise<void>;onNotice:(s:string)=>void}){
   const [view,setView]=useState<View>('level');
+  // El mes del ritual vive aquí y no dentro de `Closings` porque el aviso del Nivel tiene que poder
+  // abrir el cierre en un mes concreto. De paso, ir y volver de subvista ya no lo reinicia.
+  const [month,setMonth]=useState(currentMonth());
+  const goToClosing=(target:string)=>{setMonth(target);setView('closing')};
   const active=useMemo(()=>accounts.filter(a=>!a.archived).sort(byOrder),[accounts]);
   // Sin cuentas no hay nada que enseñar ni que cerrar, y aquí no hay semillas (a diferencia de las
   // categorías): la primera vez la pantalla está vacía de verdad, así que se manda a crear una cuenta.
   const blank=<Empty icon={<Landmark/>} title="Todavía no tienes cuentas" text="Crea tu primera cuenta en la pestaña Cuentas —la corriente, el broker, la hipoteca— y podrás cerrar el mes."/>;
   return <><section className="period-bar"><div className="segmented">{views.map(([id,label])=><button key={id} className={view===id?'active':''} onClick={()=>setView(id)}>{label}</button>)}</div></section>
-  {view==='level'&&(active.length?<Level accounts={accounts} closings={closings}/>:blank)}
-  {view==='closing'&&(active.length?<Closings accounts={active} closings={closings} reload={reload} onNotice={onNotice}/>:blank)}
+  {view==='level'&&(active.length?<Level accounts={accounts} closings={closings} movements={movements} onGoToClosing={goToClosing}/>:blank)}
+  {/* `key={month}`: cambiar de mes tira el borrador remontando, y no con un efecto que lo limpie. Da
+      igual que el cambio venga de las flechas o del aviso del Nivel, y sin él lo tecleado para marzo
+      acabaría guardándose en el cierre de abril. */}
+  {view==='closing'&&(active.length?<Closings key={month} accounts={active} closings={closings} month={month} setMonth={setMonth} reload={reload} onNotice={onNotice}/>:blank)}
   {view==='accounts'&&<Accounts accounts={accounts} reload={reload} onNotice={onNotice}/>}</>;
 }
 
 /** El nivel: lo que hay ahora mismo, que es el último cierre de cada cuenta, y cómo ha cambiado. El
  *  saldo va en gris —verde y rojo siguen reservados al flujo—; el Δ **sí** es flujo, así que se pinta
  *  verde/rojo. Es extender la regla de color a una superficie nueva, no una excepción. */
-function Level({accounts,closings}:{accounts:Account[];closings:Closing[]}){
+function Level({accounts,closings,movements,onGoToClosing}:{accounts:Account[];closings:Closing[];movements:Movement[];onGoToClosing:(month:string)=>void}){
   const latest=useMemo(()=>latestClosings(closings),[closings]);
   // El nivel y las columnas solo miran las cuentas vivas; la serie histórica recibe **todas**, con las
   // archivadas, o los meses viejos perderían las cuentas que entonces existían y la línea daría un
@@ -40,6 +47,10 @@ function Level({accounts,closings}:{accounts:Account[];closings:Closing[]}){
   // El Δ es el del último mes cerrado, que es el mismo que manda en el nivel.
   const month=series.at(-1)?.month;
   const delta=useMemo(()=>month?monthDelta(accounts,closings,month):null,[accounts,closings,month]);
+  const gap=useMemo(()=>month?unclassified(accounts,closings,movements,month):null,[accounts,closings,movements,month]);
+  // Desde el mes ANTERIOR al actual: el mes en curso todavía no toca cerrarlo, y avisar de él daría
+  // la lata desde el día 1.
+  const pending=useMemo(()=>monthsWithoutClosing(closings,previousMonth(currentMonth())),[closings]);
   const assets=active.filter(a=>a.nature==='asset'); const liabilities=active.filter(a=>a.nature==='liability');
   const balance=(account:Account)=>latest.find(c=>c.accountId===account.id);
   // El '+' hay que ponerlo a mano: `money.format` solo escribe el signo cuando es negativo.
@@ -56,6 +67,22 @@ function Level({accounts,closings}:{accounts:Account[];closings:Closing[]}){
   </section>
   {delta&&<p className="hint">Frente a {monthLabel(previousMonth(month!))}: ahorraste <b>{signed(delta.realSavings)}</b> y el mercado puso <b>{signed(delta.returns)}</b>. {delta.complete?'':<><span className="tag">Mes incompleto</span> Alguna cuenta no tiene cierre en los dos meses, así que el Δ solo cuenta las que sí.</>}</p>}
   <p className="hint">El dato es mensual: entre cierres se muestra el <b>último cierre</b> de cada cuenta, no el saldo de hoy.</p>
+  {/* Sin role="alert" ni notificaciones: es un recordatorio, no una alarma, y la región aria-live de
+      App.tsx es la única viva de la app. Lleva al mes más antiguo pendiente para rellenar hacia delante. */}
+  {pending.length>0&&<section className="closing-nudge"><CalendarClock aria-hidden="true"/>
+    <p>{pending.length===1?<>Todavía no has cerrado <b>{monthLabel(pending[0])}</b>.</>:<>Llevas <b>{pending.length} meses</b> sin cerrar; el más antiguo es {monthLabel(pending[0])}.</>} Cuantos más huecos, menos dice la serie.</p>
+    <button className="secondary" onClick={()=>onGoToClosing(pending[0])}>Cerrar {monthLabel(pending[0])}</button></section>}
+  {/* El descuadre en gris, nunca en verde/rojo: es un aviso, no una mejora ni un empeoramiento. Y se
+      muestra sin corregirse — generar un movimiento de ajuste falsearía las categorías y contaminaría
+      el donut, la vista semanal y el gráfico de evolución. */}
+  {gap&&<section className="unclassified">
+    <span>Sin clasificar en {monthLabel(month!)}</span><strong>{signed(gap.amount)}</strong>
+    <p>{gap.amount===0?<>Los movimientos del mes explican tu ahorro al céntimo.</>:<>Tu ahorro real (<b>{signed(gap.realSavings)}</b>) {gap.amount>0?'supera':'se queda por debajo de'} lo que explican los movimientos de ese mes (<b>{signed(gap.accountingSavings)}</b>{gap.liabilityContributed?<>, más {money.format(gap.liabilityContributed)} de principal amortizado</>:''}).</>}</p>
+    <details><summary>¿Por qué esta cifra casi nunca es cero?</summary>
+      <p>No es un error ni hay nada que arreglar: es la parte del cambio de tus saldos que tus movimientos no cuentan. Casi siempre es un gasto que se te olvidó registrar —o un préstamo.</p>
+      <p>Con una hipoteca aparece todos los meses: pagas 400 € de cuota y contablemente son 400 € de gasto, pero quizá 100 fueron intereses y 300 bajaron la deuda, que es ahorro. Si quieres que cuadre, teclea esos 300 en <b>Principal amortizado</b> al cerrar el mes; si no, se lee sabiendo de dónde viene.</p>
+      <p>Si lo que falta es un gasto, regístralo tú con su categoría. FinHub nunca lo inventará: un movimiento de ajuste automático falsearía tus categorías y tus gráficos.</p>
+    </details></section>}
   {series.length>1&&<Suspense fallback={<div className="chart-loading">Dibujando gráficos…</div>}><section className="charts"><article className="chart wide"><h2>Evolución del patrimonio</h2><p>Un punto por mes cerrado; los meses sin cierre quedan como hueco</p><NetWorthChart data={series}/></article></section></Suspense>}
   <section className="category-columns">{column('Activos',assets)}{column('Pasivos',liabilities)}</section></>;
 }
@@ -67,10 +94,10 @@ const EMPTY_DRAFT: Draft = { balance: '', contributed: '', note: '' };
 
 /** El ritual mensual. Aquí se gana o se pierde el módulo: el requisito son dos minutos, así que es una
  *  sola pantalla con un campo por cuenta y el total recalculándose en vivo. */
-function Closings({accounts,closings,reload,onNotice}:{accounts:Account[];closings:Closing[];reload:()=>Promise<void>;onNotice:(s:string)=>void}){
-  // Selector de mes propio: no toca `prefs`, así navegar aquí no cambia el periodo del Resumen ni de la
-  // vista Semanal. Y un cierre es un mes, no una fecha.
-  const [month,setMonth]=useState(currentMonth());
+function Closings({accounts,closings,month,setMonth,reload,onNotice}:{accounts:Account[];closings:Closing[];month:string;setMonth:(m:string)=>void;reload:()=>Promise<void>;onNotice:(s:string)=>void}){
+  // El mes vive en `Patrimonio` (el aviso del Nivel abre el cierre en un mes concreto), pero el
+  // selector sigue siendo propio: no toca `prefs`, así navegar aquí no cambia el periodo del Resumen
+  // ni de la vista Semanal. Y un cierre es un mes, no una fecha.
   // Solo las filas TOCADAS entran en el borrador, porque solo ellas se guardan. Lo que no se ha tocado
   // se lee de los cierres guardados, así que editar un mes viejo no reescribe las cuentas que no miras.
   const [draft,setDraft]=useState<Record<string,Draft>>({}); const [error,setError]=useState(''); const [saving,setSaving]=useState(false);
@@ -83,8 +110,7 @@ function Closings({accounts,closings,reload,onNotice}:{accounts:Account[];closin
   // campo prerrellenado arrastraría en silencio el número del mes pasado a la serie histórica.
   const field=(account:Account):Draft=>{const current=draft[account.id];if(current)return current;const closing=savedFor(account);return closing?{balance:closing.balance===null?'':String(closing.balance),contributed:closing.contributed===undefined?'':String(closing.contributed),note:closing.note??''}:EMPTY_DRAFT};
   const update=(account:Account,patch:Partial<Draft>)=>{setError('');setDraft(d=>({...d,[account.id]:{...field(account),...patch}}))};
-  // Cambiar de mes tira el borrador: si no, lo tecleado para marzo se guardaría en el cierre de abril.
-  const go=(delta:number)=>{setMonth(m=>shiftMonth(m,delta));setDraft({});setError('')};
+  const go=(delta:number)=>setMonth(shiftMonth(month,delta));
   const isCurrent=month===currentMonth();
   // El total y el contador se calculan con lo que hay EN PANTALLA, no con lo guardado: el objetivo es
   // cazar un dedazo antes de guardar. Sin useMemo a propósito: son 3-8 cuentas y `field` lee el
