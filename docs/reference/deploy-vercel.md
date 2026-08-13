@@ -98,6 +98,10 @@ Para regenerar los PNG desde `public/favicon.svg` no hace falta instalar nada (C
 `--screenshot --window-size` + `sips -z` para reescalar). El `apple-touch-icon` lleva fondo sólido porque
 iOS ignora la transparencia y la pinta en negro.
 
+> ⚠️ **Pendiente**: el deploy está verificado a nivel de servidor, pero **no en un móvil real**. Los pasos
+> (instalar en la pantalla de inicio, modo avión, vuelta de red, sesión caducada sin conexión) están en el
+> caso 9 de [[qa-playbook]]. Hasta hacerlos, el objetivo de la fase 6 está cumplido solo a medias.
+
 ## Operación
 
 - **Rollback**: Deployments → el anterior → *Promote to Production*. No hace falta tocar git.

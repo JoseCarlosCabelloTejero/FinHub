@@ -95,4 +95,29 @@ vacía la cola y `key={userId}` remonta el árbol entero).
 - Con lector de pantalla, los avisos ("Movimiento añadido", "Sin conexión") se anuncian una sola vez.
 - Un mes de febrero de 28 días debe mostrar **4** columnas de semana en la vista Semanal.
 
-Related: [[testing]] · [[comandos-y-entorno]] · [[00-index]]
+### 9. Post-deploy en un móvil real → [[deploy-vercel]]
+
+> ⚠️ **Pendiente de verificar.** El deploy está hecho y comprobado a nivel de servidor (la pantalla de
+> login renderiza, las variables van dentro del bundle, el manifest y los iconos se sirven), pero **esto
+> todavía no se ha ejercido en un dispositivo real**. Hasta que se haga, el objetivo de la fase 6 —usar la
+> app desde el móvil— está verificado solo a medias.
+
+A diferencia del resto del playbook, esto **no se hace en `localhost`** sino contra producción, y **no se
+puede sustituir por DevTools**: el *Offline* del navegador simula la red, no un móvil que se queda sin
+cobertura, se suspende y vuelve horas después con el access token caducado.
+
+1. **Instalar**: abrir el dominio en el móvil → *Añadir a pantalla de inicio* → comprobar que sale el
+   icono correcto y que **abre sin barra de navegador** (`display: standalone`).
+2. **Login** en el móvil y crear un movimiento.
+3. **Comprobar el viaje completo**: ese movimiento debe aparecer en el portátil al cambiar de pestaña y
+   volver, o en ≤ 60 s por el sondeo. → [[pull]]
+4. **Modo avión** (el caso que de verdad valida el diseño local-first): con la sesión ya establecida, la
+   app debe seguir **usable**, dejar crear movimientos y el chip avisar de lo pendiente. → [[escritura-local]]
+5. **Volver la red**: la cola debe subir sola y el movimiento aparecer en el portátil.
+6. **El caso de la sesión caducada**: dejar la app cerrada **más de una hora** (el access token dura 1 h) y
+   abrirla **sin red**. Debe entrar con los datos locales por el fallback a `meta.userId`, **no** mandarte
+   al login. Es la limitación asumida más fácil de romper sin darse cuenta. → [[supabase-auth]]
+
+Si algo falla aquí, el sospechoso **no es el deploy** sino el motor de sync: empezar por [[sync-model]].
+
+Related: [[testing]] · [[comandos-y-entorno]] · [[deploy-vercel]] · [[00-index]]
