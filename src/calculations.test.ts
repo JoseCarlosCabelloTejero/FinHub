@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { available, closingId, filterPeriod, latestClosings, monthCompleteness, netWorth, parseAmount, previousMonth, shiftMonth, summary, topCategories, weeklyBreakdown, weekOfMonth, weeksInMonth } from './calculations';
+import { available, closingId, closingsByMonth, filterPeriod, investmentReturns, latestClosings, monthCompleteness, monthDelta, netWorth, netWorthSeries, parseAmount, previousMonth, shiftMonth, summary, topCategories, weeklyBreakdown, weekOfMonth, weeksInMonth } from './calculations';
 import { EPOCH_UPDATED_AT } from './data';
 import type { Account, Category, Closing, Movement } from './types';
 const movement=(type:'income'|'expense',amount:number,date='2026-04-10',categoryId='x',subcategoryId?:string):Movement=>({id:crypto.randomUUID(),type,amount,date,categoryId,subcategoryId,concept:'Test',createdAt:'',updatedAt:''});
@@ -59,17 +59,19 @@ describe('importes tecleados en el ritual',()=>{
   it('lee la basura como "no revisado"',()=>expect(parseAmount('abc')).toBeNull());
 });
 
-describe('patrimonio',()=>{
-  const account=(id:string,nature:'asset'|'liability'='asset',flags:Partial<Account>={}):Account=>({id,name:id,nature,isInvestment:false,isLiquid:false,archived:false,order:0,updatedAt:EPOCH_UPDATED_AT,...flags});
-  const closing=(accountId:string,month:string,balance:number|null,contributed?:number):Closing=>({id:closingId(accountId,month),accountId,month,balance,...(contributed===undefined?{}:{contributed}),updatedAt:EPOCH_UPDATED_AT});
-  // El ejemplo de la sección 6 del diseño del dominio, que es la prueba de que el modelo cuadra.
-  const corriente=account('corriente','asset',{isLiquid:true});
-  const broker=account('broker','asset',{isInvestment:true});
-  const hipoteca=account('hipoteca','liability');
-  const ejemplo=[corriente,broker,hipoteca];
-  const febrero=[closing('corriente','2026-02',10000),closing('broker','2026-02',5000),closing('hipoteca','2026-02',100000)];
-  const marzo=[closing('corriente','2026-03',9500),closing('broker','2026-03',6200,1000),closing('hipoteca','2026-03',99700,0)];
+const account=(id:string,nature:'asset'|'liability'='asset',flags:Partial<Account>={}):Account=>({id,name:id,nature,isInvestment:false,isLiquid:false,archived:false,order:0,updatedAt:EPOCH_UPDATED_AT,...flags});
+const closing=(accountId:string,month:string,balance:number|null,contributed?:number):Closing=>({id:closingId(accountId,month),accountId,month,balance,...(contributed===undefined?{}:{contributed}),updatedAt:EPOCH_UPDATED_AT});
+// El ejemplo de la sección 6 del diseño del dominio, que es la prueba de que el modelo cuadra. Vive
+// fuera de los describe porque el nivel y la evolución se miden sobre los mismos tres meses.
+const corriente=account('corriente','asset',{isLiquid:true});
+const broker=account('broker','asset',{isInvestment:true});
+const hipoteca=account('hipoteca','liability');
+const ejemplo=[corriente,broker,hipoteca];
+const febrero=[closing('corriente','2026-02',10000),closing('broker','2026-02',5000),closing('hipoteca','2026-02',100000)];
+const marzo=[closing('corriente','2026-03',9500),closing('broker','2026-03',6200,1000),closing('hipoteca','2026-03',99700,0)];
+const abril=[closing('corriente','2026-04',9000),closing('broker','2026-04',6000),closing('hipoteca','2026-04',99400)];
 
+describe('patrimonio',()=>{
   it('resta el pasivo aunque el saldo se teclee en positivo',()=>expect(netWorth([account('deuda','liability')],[closing('deuda','2026-03',300)])).toBe(-300));
   it('calcula el patrimonio neto de febrero del ejemplo',()=>expect(netWorth(ejemplo,febrero)).toBe(-85000));
   it('calcula el patrimonio neto de marzo del ejemplo',()=>expect(netWorth(ejemplo,marzo)).toBe(-84000));
@@ -88,4 +90,31 @@ describe('patrimonio',()=>{
   it('cuenta cuántas cuentas se han revisado ese mes',()=>expect(monthCompleteness(ejemplo,marzo,'2026-03')).toEqual({reviewed:3,total:3}));
   it('no cuenta como revisada una cuenta vaciada',()=>expect(monthCompleteness(ejemplo,[closing('corriente','2026-03',9500),closing('broker','2026-03',null)],'2026-03')).toEqual({reviewed:1,total:3}));
   it('no cuenta los cierres de otros meses',()=>expect(monthCompleteness(ejemplo,febrero,'2026-03')).toEqual({reviewed:0,total:3}));
+
+  it('agrupa los cierres por mes sin perder ninguno',()=>{const meses=closingsByMonth([...febrero,...marzo]);expect([...meses.keys()].sort()).toEqual(['2026-02','2026-03']);expect(meses.get('2026-02')).toHaveLength(3)});
+});
+
+describe('evolución del patrimonio',()=>{
+  // El ejemplo de la sección 6 del diseño al completo: es la prueba de que el modelo cuadra.
+  it('reparte el Δ del ejemplo en 800 de ahorro y 200 de rentabilidad',()=>expect(monthDelta(ejemplo,[...febrero,...marzo],'2026-03')).toEqual({delta:1000,realSavings:800,returns:200,complete:true}));
+  it('cumple la identidad Δ = ahorro + rentabilidad',()=>{const mes=monthDelta(ejemplo,[...febrero,...marzo],'2026-03')!;expect(mes.realSavings+mes.returns).toBe(mes.delta)});
+  // Mover 1.000 € de la corriente al broker no te hace más rico: baja una y sube el aportado de la otra.
+  it('no cuenta el traspaso al broker como ahorro extra',()=>expect(monthDelta([corriente,broker],[closing('corriente','2026-02',10000),closing('broker','2026-02',5000),closing('corriente','2026-03',9000),closing('broker','2026-03',6000,1000)],'2026-03')).toEqual({delta:0,realSavings:0,returns:0,complete:true}));
+  it('detalla la rentabilidad por cuenta de inversión',()=>expect(investmentReturns(ejemplo,[...febrero,...marzo],'2026-03')).toEqual([{accountId:'broker',name:'broker',contributed:1000,returns:200}]));
+  // Una retirada es aportado negativo: sale del ahorro, no de lo que puso el mercado.
+  it('lee una retirada del broker como aportado negativo',()=>expect(monthDelta([broker],[closing('broker','2026-02',5000),closing('broker','2026-03',4200,-1000)],'2026-03')).toEqual({delta:-800,realSavings:-1000,returns:200,complete:true}));
+
+  it('compara contra el mes anterior, no contra el último disponible',()=>expect(monthDelta(ejemplo,[...febrero,...abril],'2026-04')).toBeNull());
+  it('devuelve null en el primer mes, para pintar "—" y no un 0',()=>expect(monthDelta(ejemplo,marzo,'2026-03')).toBeNull());
+  it('excluye la cuenta que solo tiene saldo en uno de los dos meses',()=>expect(monthDelta(ejemplo,[...febrero,closing('corriente','2026-03',9500),closing('broker','2026-03',6200,1000)],'2026-03')).toEqual({delta:700,realSavings:500,returns:200,complete:false}));
+  it('no marca incompleto por una cuenta sin saldo en ninguno de los dos meses',()=>expect(monthDelta([...ejemplo,account('vieja','asset',{archived:true})],[...febrero,...marzo,closing('vieja','2025-01',400)],'2026-03')).toMatchObject({delta:1000,complete:true}));
+
+  it('construye la serie del primer al último mes con cierre',()=>expect(netWorthSeries(ejemplo,[...febrero,...marzo]).map(p=>p.value)).toEqual([-85000,-84000]));
+  // Si solo se emitieran los meses que existen, recharts uniría febrero con abril e inventaría una
+  // rentabilidad que nadie ganó. El hueco es el dato.
+  it('corta la línea en el mes sin cierre en vez de interpolarlo',()=>{const serie=netWorthSeries(ejemplo,[...febrero,...abril]);expect(serie.map(p=>p.month)).toEqual(['2026-02','2026-03','2026-04']);expect(serie.map(p=>p.value)).toEqual([-85000,null,-84400])});
+  it('trata un mes entero vaciado como hueco, no como un patrimonio de 0',()=>expect(netWorthSeries(ejemplo,[...febrero,...ejemplo.map(a=>closing(a.id,'2026-03',null)),...abril]).map(p=>p.value)).toEqual([-85000,null,-84400]));
+  it('mantiene en la serie las cuentas archivadas',()=>expect(netWorthSeries([...ejemplo,account('vieja','asset',{archived:true})],[...febrero,closing('vieja','2026-02',1000)]).map(p=>p.value)).toEqual([-84000]));
+  it('devuelve una serie vacía si no hay ningún cierre con saldo',()=>expect(netWorthSeries(ejemplo,[closing('corriente','2026-03',null)])).toEqual([]));
+  it('etiqueta cada punto con el mes abreviado para que quepa en el eje',()=>expect(netWorthSeries(ejemplo,marzo)[0].name).toBe('mar 26'));
 });

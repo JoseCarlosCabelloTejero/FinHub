@@ -311,6 +311,10 @@ nav svg { width: 19px }
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
 }
+/* El Δ del patrimonio es un quinto KPI y se quedaba solo en su fila dejando tres huecos: que ocupe el
+   ancho entero. Solo entra con exactamente cinco (el Resumen tiene cuatro) y aguanta los breakpoints
+   de dos columnas sin repetir la regla. */
+.stats > .stat:nth-child(5):last-child { grid-column: 1 / -1 }
 .stat {
   position: relative;
   padding: 20px;

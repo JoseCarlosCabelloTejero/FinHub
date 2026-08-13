@@ -106,3 +106,74 @@ export function parseAmount(raw: string): number | null {
   const value = Number(raw);
   return raw.trim() === '' || !Number.isFinite(value) ? null : value;
 }
+/** Los cierres agrupados por mes en un solo recorrido. La escribe F2 y no F1b porque su cliente real es
+ *  `netWorthSeries`, que si no haría un `filter` por cada mes de la serie. */
+export function closingsByMonth(closings: Closing[]): Map<string, Closing[]> {
+  const months = new Map<string, Closing[]>();
+  for (const closing of closings) { const list = months.get(closing.month); if (list) list.push(closing); else months.set(closing.month, [closing]); }
+  return months;
+}
+export interface NetWorthPoint { month: string; name: string; value: number|null }
+/** La serie del gráfico de evolución, del primer al último mes **con** cierre. Los meses sin cierre
+ *  entran como `value: null` para que la línea se corte: emitiendo solo los meses que existen, recharts
+ *  uniría los extremos e inventaría una rentabilidad que nadie ganó. Un mes entero vaciado es "sin
+ *  cierre", no un patrimonio de 0.
+ *  Pásale **todas** las cuentas, también las archivadas: si no, los meses viejos perderían las cuentas
+ *  que entonces existían y la serie caería en escalón el día que archivas una.
+ *  Un mes revisado a medias entra con lo que sí se revisó (`netWorth` cuenta como 0 la cuenta sin
+ *  cierre): la señal de "faltan cuentas" la da `monthDelta`, que puede calcularla sin inventarse
+ *  cuándo nació o se archivó cada cuenta. */
+export function netWorthSeries(accounts: Account[], closings: Closing[]): NetWorthPoint[] {
+  const byMonth = closingsByMonth(closings);
+  const reviewed = (month: string) => byMonth.get(month)?.some((closing) => closing.balance !== null) ?? false;
+  const months = [...byMonth.keys()].filter(reviewed).sort();
+  if (!months.length) return [];
+  const series: NetWorthPoint[] = [];
+  // Etiqueta corta ('ago 26'): `monthLabel` ('agosto 2026') no cabe en el eje X de un móvil.
+  for (let month = months[0]; month <= months[months.length-1]; month = shiftMonth(month, 1))
+    series.push({ month, name: format(parseISO(`${month}-01`), 'MMM yy', { locale: es }), value: reviewed(month) ? netWorth(accounts, byMonth.get(month)!) : null });
+  return series;
+}
+interface MonthPair { account: Account; start: number|null; end: number|null; contributed: number }
+/** Cada cuenta con su saldo en `month` y en el mes ANTERIOR (`null` si ese mes no se revisó). Lo
+ *  comparten `monthDelta` e `investmentReturns` para que el reparto no pueda descuadrar. */
+function monthPairs(accounts: Account[], closings: Closing[], month: string): MonthPair[] {
+  const previous = previousMonth(month);
+  const at = (accountId: string, target: string) => closings.find((closing) => closing.accountId === accountId && closing.month === target && closing.balance !== null);
+  return accounts.map((account) => { const end = at(account.id, month); return { account, start: at(account.id, previous)?.balance ?? null, end: end?.balance ?? null, contributed: end?.contributed ?? 0 }; });
+}
+/** Las cuentas comparables: las que tienen saldo en los dos meses. El resto no entra en ninguna cifra. */
+const comparable = (pairs: MonthPair[]) => pairs.filter((pair): pair is MonthPair & {start: number; end: number} => pair.start !== null && pair.end !== null);
+export interface AccountReturn { accountId: string; name: string; contributed: number; returns: number }
+/** Lo que puso el mercado en cada cuenta de inversión: fin − inicio − aportado. En **euros y jamás en
+ *  porcentaje** —el porcentaje ingenuo miente cuando las aportaciones se concentran en el tiempo, y es
+ *  justo el número que uno compararía con un índice—. El aportado puede ser negativo (una retirada). */
+export function investmentReturns(accounts: Account[], closings: Closing[], month: string): AccountReturn[] {
+  return comparable(monthPairs(accounts.filter((account) => account.isInvestment), closings, month))
+    .map(({account, start, end, contributed}) => ({ accountId: account.id, name: account.name, contributed, returns: (end - start - contributed) * sign(account) }));
+}
+export interface MonthDelta { delta: number; realSavings: number; returns: number; complete: boolean }
+/** El reparto de un mes contra el **anterior**, nunca contra "el último disponible": comparar agosto con
+ *  mayo llamaría rentabilidad a tres meses de ahorro. (La pista en gris del ritual sí usa el último
+ *  conocido, `latestClosings(closings, month)` — son dos semánticas distintas a propósito.)
+ *  `complete: false` cuando alguna cuenta tiene saldo en **exactamente uno** de los dos meses: se queda
+ *  fuera y hay que decirlo. La que no tiene saldo en ninguno de los dos (archivada hace años, o creada
+ *  después) no participa ni ensucia el resultado.
+ *  Devuelve `null` cuando no hay nada que comparar —primer mes, o mes anterior sin cerrar—: la UI pinta
+ *  "—" y no un 0, igual que el `percent: null` de `weeklyBreakdown`. */
+export function monthDelta(accounts: Account[], closings: Closing[], month: string): MonthDelta|null {
+  const pairs = monthPairs(accounts, closings, month);
+  const both = comparable(pairs);
+  if (!both.length) return null;
+  // El ahorro es lo que pusiste tú: la variación entera de las cuentas que no son de inversión, y solo
+  // el aportado en las que sí. Los 1.000 € que van de la corriente al broker se cancelan solos —bajan
+  // una y suben el aportado de la otra—, que es justo lo que se busca: mover dinero no te hace más rico.
+  // La identidad Δ = ahorro + rentabilidad se cumple **por construcción**: es el mismo sumatorio
+  // Σ (fin − inicio) · signo partido en dos, así que el reparto no puede descuadrar.
+  return {
+    delta: both.reduce((total, {account, start, end}) => total + (end - start) * sign(account), 0),
+    realSavings: both.reduce((total, {account, start, end, contributed}) => total + (account.isInvestment ? contributed : end - start) * sign(account), 0),
+    returns: investmentReturns(accounts, closings, month).reduce((total, row) => total + row.returns, 0),
+    complete: !pairs.some((pair) => (pair.start === null) !== (pair.end === null)),
+  };
+}

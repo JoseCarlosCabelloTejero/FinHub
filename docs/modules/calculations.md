@@ -82,8 +82,12 @@ el riesgo 4 de [[patrimonio]] → [[periodos]]
 | `available(accounts, closings)` | El "disponible mañana": solo cuentas líquidas, con su signo |
 | `monthCompleteness(accounts, closings, month)` | `{ reviewed, total }` |
 | `parseAmount(raw)` | El importe tecleado, o `null` si el campo está vacío |
+| `closingsByMonth(closings)` | `Map<mes, Closing[]>` en un solo recorrido |
+| `netWorthSeries(accounts, closings)` | La serie del gráfico: `{ month, name, value }` por mes, con `value: null` en los meses sin cierre |
+| `monthDelta(accounts, closings, month)` | `{ delta, realSavings, returns, complete }`, o `null` si no hay nada que comparar |
+| `investmentReturns(accounts, closings, month)` | Lo que puso el mercado en cada cuenta de inversión |
 
-Cuatro reglas que sostienen estas funciones:
+Cinco reglas que sostienen estas funciones:
 
 - **El signo lo pone la naturaleza de la cuenta**, nunca quien teclea. Un saldo es siempre positivo y un
   pasivo se resta al agregarse. Así un pasivo tecleado en negativo —que dispararía el patrimonio— es
@@ -94,12 +98,37 @@ Cuatro reglas que sostienen estas funciones:
 - **`parseAmount('')` es `null`, no 0.** `Number('') === 0`, y ese cero acabaría en la serie histórica
   como un saldo real cada vez que te saltas una cuenta en el ritual. Es la trampa con test propio.
 - **Quién entra lo decide el caller.** `netWorth` no filtra archivadas: el nivel actual le pasa solo las
-  activas, y la serie histórica (pendiente) tendrá que incluirlas. Σ activos y Σ pasivos no necesitan
-  función: son `netWorth` con la lista ya filtrada por `nature`.
+  activas, y **`netWorthSeries` las quiere todas** —si no, los meses viejos perderían las cuentas que
+  entonces existían y la línea daría un escalón el día que archivas una—. Σ activos y Σ pasivos no
+  necesitan función: son `netWorth` con la lista ya filtrada por `nature`.
+- **La identidad Δ = ahorro + rentabilidad se cumple por construcción**, no por cuidado: `realSavings` y
+  `returns` son el mismo sumatorio `Σ (fin − inicio) · signo` partido en dos, según de quién fuera el
+  dinero. Por eso el reparto no puede descuadrar, y por eso `monthDelta` e `investmentReturns` comparten
+  la misma lista de cuentas comparables (`monthPairs`).
 
 `available` merece una nota: **`isLiquid` hace dos trabajos con un solo interruptor**, porque suma la
 corriente y resta la tarjeta (líquida y pasivo a la vez) ignorando el broker y la hipoteca. No hace falta
 un segundo atributo de "exigible a corto plazo".
+
+### La serie y el Δ: tres decisiones que no son estéticas
+
+- **Los meses sin cierre entran como `value: null`.** Emitiendo solo los meses que existen, recharts
+  uniría los extremos e **inventaría una rentabilidad que nadie ganó**; el hueco es el dato. De ahí que
+  el gráfico vaya sin `connectNulls` → [[charts]]. Un mes entero vaciado (todos los saldos a `null`) es
+  "sin cierre", no un patrimonio de 0. La serie va del primer al último mes **con** cierre: no se dibuja
+  eje vacío por el mes en curso todavía sin cerrar.
+- **`monthDelta` compara contra el mes ANTERIOR, nunca contra "el último disponible".** Comparar agosto
+  con mayo llamaría rentabilidad a tres meses de ahorro. Ojo: la pista en gris del ritual **sí** usa el
+  último conocido (`latestClosings(closings, month)`) — son dos semánticas distintas a propósito.
+- **`complete: false` cuando una cuenta tiene saldo en exactamente uno de los dos meses.** Se queda fuera
+  del reparto y hay que decirlo. La que no tiene saldo en **ninguno** de los dos (archivada hace años, o
+  creada después) no participa ni ensucia el resultado: medir eso de otra forma exigiría saber cuándo
+  nació y cuándo murió cada cuenta, y ese dato no existe en el modelo.
+
+Un mes revisado a medias sí entra en la serie con lo que se revisó (`netWorth` cuenta como 0 la cuenta sin
+cierre, regla de arriba). La señal de "faltan cuentas" la da el Δ, que puede calcularla sin inventarse
+nada. La rentabilidad se devuelve **en euros y jamás en porcentaje** — el motivo está en la sección 5 de
+[[patrimonio]].
 
 ## Al añadir lógica aquí
 

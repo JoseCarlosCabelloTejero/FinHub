@@ -34,7 +34,8 @@ barato que grepear `src/` entero y el esquema SQL.
 - [[movimientos]] — la entidad central: ingreso o gasto.
 - [[categorias]] — categorías y subcategorías. **Nunca se borran, se archivan.**
 - [[periodos]] — mes/año y las semanas 1-5 por día natural.
-- [[patrimonio]] — cuentas, cierres mensuales y descuadre. Esquema y sync hechos; UI pendiente (F1b-F4).
+- [[patrimonio]] — cuentas, cierres mensuales, Δ con ahorro/rentabilidad y descuadre. Hechas F1a-F2;
+  pendientes el descuadre "sin clasificar" (F3) y la vinculación movimiento→cuenta (F4).
 - [[preferencias]] — lo único que no se sincroniza, y por qué.
 - [[sync-model]] — outbox, LWW, lápidas, epoch de borrado.
 

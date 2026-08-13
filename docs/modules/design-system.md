@@ -59,11 +59,20 @@ bueno.
   la cola, no una categoría real) usa el sentinel `OTROS_ID` y siempre lleva `theme.muted`, para no
   competir por un tono de identidad. Con más de 6 categorías con gasto en el mismo periodo, dos pueden
   coincidir en color — límite matemático de tener solo 6 tonos, no un bug.
-- **Las cifras de nivel van en gris.** El patrimonio neto, el disponible y los saldos por cuenta usan
-  `tone="neutral"` aunque el neto sea negativo: un pasivo no es un gasto, y pintarlo de rojo rompería la
-  regla. Es aplicar la regla vigente a una superficie nueva, no una excepción → [[patrimonio]]. La
-  variación (Δ) sí es un flujo y pedirá **extender** el enunciado, pero eso llega con el gráfico de
-  evolución, no antes.
+- **El nivel va en gris; el flujo, en verde y rojo.** Es el enunciado completo de la regla, extendido
+  al dominio del patrimonio → [[patrimonio]]:
+  - **Nivel** (el saldo: patrimonio neto, disponible, Σ activos, Σ pasivos, el saldo de cada cuenta y la
+    línea del gráfico de evolución) → `tone="neutral"` / `theme.text`, **aunque el neto sea negativo**.
+    Un pasivo no es un gasto, y pintarlo de rojo diría que gastaste lo que solo debes.
+  - **Flujo** (ingreso, gasto, y la **variación Δ del patrimonio**) → `--income` / `--expense`. El Δ
+    tiene la misma semántica de "mejora" y "empeora" que un ingreso o un gasto, así que usa su color.
+    Un Δ de exactamente 0 va en gris: no es ni mejora ni empeora.
+  - Esto **extiende** el enunciado de "verde = ingreso, rojo = gasto", no lo rompe: la frontera nunca fue
+    ingreso/gasto contra el resto, sino **flujo contra nivel**. Lo que sigue prohibido es pintar de rojo
+    algo que no es flujo (un error de sync, un pasivo, un descuadre).
+- **El "sin clasificar" de F3 va en gris**, aunque sea una diferencia entre dos flujos: es un aviso, no
+  una mejora ni un empeoramiento, y un número que te riñe en rojo todos los meses es un módulo que se
+  abandona → [[patrimonio]]
 - El color y el icono son **siempre redundancia**: el texto ya lleva el significado completo (regla que
   se ve explícita en `syncCopy.ts`).
 

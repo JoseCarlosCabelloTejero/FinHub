@@ -23,6 +23,13 @@ export function ExpenseChart({data}:{data:{categoryId:string;name:string;value:n
   // Color por categoryId (identidad), no por índice: mismo color siempre para la misma categoría.
   return <Box><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="80%" paddingAngle={3}>{data.map((d)=><Cell key={d.categoryId} fill={categoryColor(d.categoryId)} stroke={theme.surface} strokeWidth={2}/>)}</Pie><Tooltip {...tooltip}/><Legend verticalAlign="bottom" {...legend}/></PieChart></ResponsiveContainer></Box>;
 }
+export function NetWorthChart({data}:{data:{name:string;value:number|null}[]}) {
+  // En `theme.text` y no en verde/rojo: esto es nivel, no flujo. Y **sin `connectNulls`**: un mes sin
+  // cierre tiene que verse como hueco, porque uniendo los extremos recharts inventaría una
+  // rentabilidad que nadie ganó. De ahí también el `dot` (TrendChart va sin él): un mes aislado entre
+  // dos huecos no dibuja segmento, así que sin punto sería invisible.
+  return <Box><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><CartesianGrid stroke={theme.line} vertical={false}/><XAxis {...xAxis}/><YAxis {...yAxis}/><Tooltip {...tooltip}/><Line dataKey="value" name="Patrimonio neto" stroke={theme.text} strokeWidth={3} dot={{r:3,fill:theme.text}} activeDot={{r:5}}/></LineChart></ResponsiveContainer></Box>;
+}
 export function WeeklyChart({data}:{data:{name:string;ingresos:number;gastos:number}[]}) {
   return <Box><ResponsiveContainer width="100%" height="100%"><BarChart data={data}><CartesianGrid stroke={theme.line} vertical={false}/><XAxis {...xAxis}/><YAxis {...yAxis}/><Tooltip {...tooltip}/><Legend {...legend}/><Bar dataKey="ingresos" fill={theme.income} radius={[5,5,0,0]}/><Bar dataKey="gastos" fill={theme.expense} radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></Box>;
 }
