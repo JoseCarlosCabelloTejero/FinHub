@@ -20,6 +20,7 @@ interface Movement {
   date: string;            // 'YYYY-MM-DD', tal cual lo produce <input type="date">
   categoryId: string;
   subcategoryId?: string;  // opcional: "Sin subcategoría"
+  accountId?: string;      // opcional: "Sin cuenta" — de dónde salió el dinero
   concept: string;
   notes?: string;
   createdAt: string;       // ISO
@@ -35,6 +36,11 @@ interface Movement {
   `form.type`, y cambiar el tipo resetea `categoryId` y `subcategoryId`.
 - **`subcategoryId` es opcional.** El `<select>` usa `value=""` para "Sin subcategoría", y ese `''`
   **se mapea a `null`** antes de subirlo: la FK rechazaría la cadena vacía. → [[sync]]
+- **`accountId` también es opcional, y con el mismo patrón `''`→`null`.** Opcional no es pereza: es lo
+  único que no huérfana los movimientos que ya existen, que nacieron sin cuenta y seguirán sin ella.
+  **Ningún agregado de flujo la mira** —`summary`, `weeklyBreakdown`, `categoryData` y `trendData` no
+  saben que existe—, así que vincular no cambia ni un céntimo de lo que ya se ve. Sirve para
+  **localizar** el descuadre, no para calcularlo → [[patrimonio]] §8 · [[calculations]]
 - **Las referencias son strings sin integridad referencial en el cliente.** Esto es intencionado y es lo
   que permite archivar categorías sin tocar el histórico. En Postgres **sí** hay FK, y de ahí la
   necesidad de `repairDanglingRefs`. → [[categorias]]
