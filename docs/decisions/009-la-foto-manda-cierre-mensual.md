@@ -40,7 +40,11 @@ cuenta?) y la **política de borrado** (¿lápidas como los movimientos, o algo 
   ausencia. Siempre `>= 0` cuando no es null — el signo lo pone la naturaleza de la cuenta, nunca el
   dato (mismo invariante que `Movement`).
 - `contributed` **no lleva check de signo**: una retirada del broker es un aportado negativo. En un
-  pasivo significa "principal amortizado".
+  pasivo significa "principal amortizado", y entonces **resta del lado contable en vez de sumar al
+  ahorro real**: la variación del saldo de la deuda ya cuenta ese principal, así que sumarlo lo
+  contaría dos veces. Lo que arregla es el otro lado, donde la cuota entera se registró como gasto
+  aunque una parte fuera ahorro. Validado contra el ejemplo de la sección 6 de [[patrimonio]]: sin
+  teclearlo, el descuadre son +300 (el principal de la hipoteca); con él, 0 → [[calculations]]
 - La PK `(user_id, id)` con el id determinista hace de unique natural sobre `(cuenta, mes)`: no hace
   falta índice único aparte.
 - En la cola, **la cuenta va delante de sus cierres** (FK), y delante de los movimientos: cuando la

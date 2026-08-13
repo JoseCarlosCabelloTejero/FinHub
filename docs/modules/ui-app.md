@@ -124,7 +124,8 @@ subvista no es una preferencia que valga la pena persistir. Sin cuentas, Nivel y
 
 Cuatro `Stat` de saldo (neto, disponible, Σ activos, Σ pasivos) **en gris**, un quinto de **Δ del último
 mes cerrado en verde/rojo** —el saldo es nivel, la variación es flujo → [[design-system]]—, la frase
-*"ahorraste X y el mercado puso Y"*, el gráfico de evolución y la lista de cuentas con su último cierre.
+*"ahorraste X y el mercado puso Y"*, el aviso de meses sin cerrar, la tarjeta del **sin clasificar**, el
+gráfico de evolución y la lista de cuentas con su último cierre.
 
 - **Los cuatro `Stat` de saldo y las columnas solo miran las cuentas activas; la serie las recibe todas.**
   Archivadas incluidas, o los meses viejos perderían las cuentas que entonces existían y la línea daría
@@ -139,15 +140,47 @@ mes cerrado en verde/rojo** —el saldo es nivel, la variación es flujo → [[d
 - **El quinto `Stat` ocupa la fila entera** (`.stats > .stat:nth-child(5):last-child`): con la rejilla de
   cuatro columnas se quedaba solo dejando tres huecos. La regla no toca al Resumen, que tiene cuatro.
 
+#### El "sin clasificar"
+
+Tarjeta propia (`.unclassified`) y **no un sexto `Stat`**: como sexta tarjeta dejaría dos huecos y le
+quitaría al Δ el ancho completo de la regla de arriba, y además la cifra no va sola — lleva la explicación
+y, colgando, el desglose por cuenta.
+
+- **En gris, siempre**, aunque sea la diferencia entre dos flujos: es un aviso, no una mejora ni un
+  empeoramiento → [[design-system]]
+- **Se llama "sin clasificar", jamás "error"**, en el copy, en el `summary` del plegable y en cualquier
+  `aria-label`. Un número que te riñe todos los meses es un módulo que abandonas en marzo, y con un
+  préstamo además sería mentira → [[patrimonio]] §7
+- **Se muestra, no se corrige.** No hay —ni habrá— un botón de "cuadrar": un movimiento de ajuste
+  automático falsearía las categorías y contaminaría el donut, la vista semanal y las tendencias. El
+  plegable lo dice explícitamente, para que el usuario no lo espere.
+- **La nota va en un `<details>` nativo**, el primero del repo: el navegador ya trae el foco, el teclado y
+  el anuncio hechos, y no hay estado que gestionar.
+- **No bloquea nada** y desaparece con el Δ (`unclassified` devuelve `null` cuando no hay mes anterior).
+
+#### El aviso de meses sin cerrar
+
+`.closing-nudge` cuando `monthsWithoutClosing()` no está vacío, con el mes **anterior** al actual como
+punto de partida: avisar del mes en curso daría la lata desde el día 1 → [[calculations]]
+
+Sin `role="alert"` ni notificaciones: es un recordatorio discreto, y la región `aria-live` de `App.tsx`
+sigue siendo la única viva de la app. Su botón salta a *Cierre mensual* **con el mes más antiguo pendiente
+preseleccionado**, para rellenar hacia delante. Eso es lo que obligó a subir el mes del ritual de
+`Closings` a `Patrimonio`.
+
 ### El ritual mensual
 
 El requisito duro son **dos minutos**, y de ahí sale casi todo:
 
-- **Selector de mes propio** (estado local, no `PeriodBar` ni `prefs`): un cierre es un mes `YYYY-MM`, no
-  una fecha, así que navegar aquí no toca el periodo del Resumen. Hacia atrás sin límite —rellenar el
-  histórico y **corregir un cierre pasado** son requisitos del dominio—; hacia delante la flecha se
-  desactiva en el mes en curso.
-- **Cambiar de mes tira el borrador.** Sin eso, lo tecleado para marzo se guardaría en el cierre de abril.
+- **Selector de mes propio** (no `PeriodBar` ni `prefs`): un cierre es un mes `YYYY-MM`, no una fecha, así
+  que navegar aquí no toca el periodo del Resumen. Hacia atrás sin límite —rellenar el histórico y
+  **corregir un cierre pasado** son requisitos del dominio—; hacia delante la flecha se desactiva en el mes
+  en curso. El estado vive en `Patrimonio` y no en `Closings`, porque el aviso del Nivel tiene que poder
+  abrir el cierre en un mes concreto.
+- **Cambiar de mes tira el borrador**, o lo tecleado para marzo se guardaría en el cierre de abril. Se
+  consigue con `key={month}` sobre `Closings` —remontar es el idioma de React para "resetea el estado
+  cuando cambia esta prop"—, y así da igual que el cambio venga de las flechas o del aviso del Nivel. Un
+  efecto que limpiara el borrador sería además `setState` dentro de `useEffect`, que el lint prohíbe.
 - **El campo va vacío, con el último saldo conocido como `placeholder` gris.** Nunca prerrellenado:
   arrastraría en silencio el número del mes pasado a la serie cada vez que te saltas una cuenta. Un campo
   vacío significa *no revisado*, y eso es información.

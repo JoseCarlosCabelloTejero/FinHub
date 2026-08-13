@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { available, closingId, closingsByMonth, filterPeriod, investmentReturns, latestClosings, monthCompleteness, monthDelta, netWorth, netWorthSeries, parseAmount, previousMonth, shiftMonth, summary, topCategories, weeklyBreakdown, weekOfMonth, weeksInMonth } from './calculations';
+import { available, closingId, closingsByMonth, filterPeriod, investmentReturns, latestClosings, monthCompleteness, monthDelta, monthsWithoutClosing, netWorth, netWorthSeries, parseAmount, previousMonth, shiftMonth, summary, topCategories, unclassified, weeklyBreakdown, weekOfMonth, weeksInMonth } from './calculations';
 import { EPOCH_UPDATED_AT } from './data';
 import type { Account, Category, Closing, Movement } from './types';
 const movement=(type:'income'|'expense',amount:number,date='2026-04-10',categoryId='x',subcategoryId?:string):Movement=>({id:crypto.randomUUID(),type,amount,date,categoryId,subcategoryId,concept:'Test',createdAt:'',updatedAt:''});
@@ -117,4 +117,35 @@ describe('evolución del patrimonio',()=>{
   it('mantiene en la serie las cuentas archivadas',()=>expect(netWorthSeries([...ejemplo,account('vieja','asset',{archived:true})],[...febrero,closing('vieja','2026-02',1000)]).map(p=>p.value)).toEqual([-84000]));
   it('devuelve una serie vacía si no hay ningún cierre con saldo',()=>expect(netWorthSeries(ejemplo,[closing('corriente','2026-03',null)])).toEqual([]));
   it('etiqueta cada punto con el mes abreviado para que quepa en el eje',()=>expect(netWorthSeries(ejemplo,marzo)[0].name).toBe('mar 26'));
+});
+
+describe('sin clasificar',()=>{
+  // Los movimientos de marzo del ejemplo de la sección 6: 2.000 de ingresos y 1.500 de gastos, de los
+  // que 400 son la cuota de la hipoteca. El ahorro contable son 500.
+  const movimientos=[movement('income',2000,'2026-03-05'),movement('expense',1100,'2026-03-12'),movement('expense',400,'2026-03-28')];
+  const marzoConPrincipal=[closing('corriente','2026-03',9500),closing('broker','2026-03',6200,1000),closing('hipoteca','2026-03',99700,300)];
+
+  // El descuadre del ejemplo NO es un error: son exactamente los 300 € de principal amortizado de la
+  // hipoteca. Contablemente pagaste 400 € de gasto; en la realidad 100 fueron intereses y 300, ahorro
+  // en forma de menos deuda. Con un préstamo esto aparecerá todos los meses.
+  it('saca los 300 € del principal de la hipoteca cuando nadie lo teclea',()=>expect(unclassified(ejemplo,[...febrero,...marzo],movimientos,'2026-03')).toEqual({amount:300,realSavings:800,accountingSavings:500,liabilityContributed:0}));
+  it('cuadra en cero cuando se teclea el principal amortizado',()=>expect(unclassified(ejemplo,[...febrero,...marzoConPrincipal],movimientos,'2026-03')).toMatchObject({amount:0,liabilityContributed:300}));
+  // El principal corrige el lado contable, no el real: si sumara al ahorro real contaría dos veces la
+  // misma bajada de deuda, que la variación del saldo ya recoge.
+  it('no toca el ahorro real al teclear el principal',()=>expect(unclassified(ejemplo,[...febrero,...marzoConPrincipal],movimientos,'2026-03')!.realSavings).toBe(800));
+  it('sin movimientos, todo el ahorro real está sin clasificar',()=>expect(unclassified(ejemplo,[...febrero,...marzo],[],'2026-03')!.amount).toBe(800));
+  it('ignora los movimientos de otros meses',()=>expect(unclassified(ejemplo,[...febrero,...marzo],[...movimientos,movement('expense',900,'2026-04-02')],'2026-03')!.amount).toBe(300));
+  it('devuelve null sin mes anterior con el que comparar, para pintar "—" y no un 0',()=>expect(unclassified(ejemplo,marzo,movimientos,'2026-03')).toBeNull());
+  // Una cuenta que no entra en el ahorro real tampoco puede corregirlo: su principal metería una
+  // corrección fantasma que descuadraría la cifra en la dirección contraria.
+  it('no corrige con el principal de un pasivo que no está en los dos meses',()=>expect(unclassified(ejemplo,[closing('corriente','2026-02',10000),closing('corriente','2026-03',9500),closing('hipoteca','2026-03',99700,300)],[],'2026-03')).toMatchObject({amount:-500,liabilityContributed:0}));
+});
+
+describe('meses sin cerrar',()=>{
+  it('avisa de enero cuando el último cierre es de diciembre',()=>expect(monthsWithoutClosing([closing('corriente','2025-12',1000)],'2026-01')).toEqual(['2026-01']));
+  it('no avisa de nada si el mes ya está cerrado',()=>expect(monthsWithoutClosing([closing('corriente','2026-03',1000)],'2026-03')).toEqual([]));
+  // Ascendente para que el [0] sea el más antiguo pendiente: es el mes al que lleva el aviso.
+  it('devuelve la racha entera, del más antiguo al más reciente',()=>expect(monthsWithoutClosing([closing('corriente','2026-05',1000)],'2026-08')).toEqual(['2026-06','2026-07','2026-08']));
+  it('no cuenta como cerrado un mes vaciado',()=>expect(monthsWithoutClosing([closing('corriente','2026-05',1000),closing('corriente','2026-07',null)],'2026-07')).toEqual(['2026-06','2026-07']));
+  it('calla si todavía no hay ningún cierre',()=>expect(monthsWithoutClosing([],'2026-08')).toEqual([]));
 });

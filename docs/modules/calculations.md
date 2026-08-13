@@ -86,6 +86,8 @@ el riesgo 4 de [[patrimonio]] → [[periodos]]
 | `netWorthSeries(accounts, closings)` | La serie del gráfico: `{ month, name, value }` por mes, con `value: null` en los meses sin cierre |
 | `monthDelta(accounts, closings, month)` | `{ delta, realSavings, returns, complete }`, o `null` si no hay nada que comparar |
 | `investmentReturns(accounts, closings, month)` | Lo que puso el mercado en cada cuenta de inversión |
+| `unclassified(accounts, closings, movements, month)` | El descuadre del mes y sus piezas, o `null` si `monthDelta` no tiene con qué comparar |
+| `monthsWithoutClosing(closings, from)` | Los meses sin cierre desde `from` hacia atrás, ascendentes; `[]` si no hay histórico |
 
 Cinco reglas que sostienen estas funciones:
 
@@ -129,6 +131,40 @@ Un mes revisado a medias sí entra en la serie con lo que se revisó (`netWorth`
 cierre, regla de arriba). La señal de "faltan cuentas" la da el Δ, que puede calcularla sin inventarse
 nada. La rentabilidad se devuelve **en euros y jamás en porcentaje** — el motivo está en la sección 5 de
 [[patrimonio]].
+
+### `unclassified`: el descuadre
+
+```
+sin clasificar = ahorro real − ahorro contable − principal amortizado de los pasivos
+```
+
+Es la primera medida de si los movimientos están completos: hasta ahora, olvidarse de 300 € de gastos
+hacía que `summary()` dijera que ahorraste 300 € de más y **nada lo contradecía**. Es la funcionalidad del
+módulo, no un bug → [[patrimonio]] §7
+
+Tres decisiones que no son obvias:
+
+- **El ahorro real se toma de `monthDelta().realSavings`, no se recalcula.** Dos cálculos paralelos de la
+  misma variación acabarían divergiendo y romperían la identidad Δ = ahorro + rentabilidad. Misma razón
+  por la que `monthDelta` e `investmentReturns` comparten `monthPairs`.
+- **El ahorro contable es `summary(filterPeriod(movements, `${month}-01`, 'month')).savings`**, y es la
+  **única unión permitida entre el mundo mes y el mundo fecha** de todo el bloque. Los movimientos viven en
+  días; el cierre, en meses.
+- **El aportado de un pasivo resta del lado contable, no suma al real.** En un pasivo "aportado" significa
+  *principal amortizado*, y la variación del saldo ya lo cuenta: sumarlo al ahorro real lo contaría dos
+  veces. Lo que corrige es el lado contable, donde la cuota entera se registró como gasto cuando una parte
+  era ahorro. Con el ejemplo de la sección 6 de [[patrimonio]]: **+300 sin teclearlo, 0 con él**, y esos
+  300 son exactamente el principal de la hipoteca. Sale de las mismas cuentas comparables que el Δ —no de
+  filtrar los cierres del mes—, porque una cuenta que no entra en el ahorro real tampoco puede corregirlo,
+  y las de inversión quedan fuera (ahí `realSavings` **ya es** el aportado).
+
+Devuelve las piezas (`realSavings`, `accountingSavings`, `liabilityContributed`) además del total, porque
+la UI explica la cifra en vez de soltarla → [[ui-app]]. Y `null`, no 0, cuando no hay mes anterior.
+
+`monthsWithoutClosing` alimenta el aviso: camina hacia atrás desde `from` y para en el último mes cerrado.
+Devuelve `[]` sin ningún cierre con saldo —sin histórico no hay racha de la que avisar, y de paso es lo que
+acota el bucle—, y en orden ascendente, para que el `[0]` sea el más antiguo pendiente. Los huecos
+*anteriores* al último mes cerrado no salen aquí: esos ya los enseña la serie del gráfico.
 
 ## Al añadir lógica aquí
 

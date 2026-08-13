@@ -177,3 +177,46 @@ export function monthDelta(accounts: Account[], closings: Closing[], month: stri
     complete: !pairs.some((pair) => (pair.start === null) !== (pair.end === null)),
   };
 }
+/** El aportado de los pasivos, que en un pasivo significa "principal amortizado".
+ *  Sale de las mismas parejas que `monthDelta` y no de filtrar los cierres del mes: una cuenta que no
+ *  entra en el ahorro real tampoco puede corregirlo, y colarla metería una corrección fantasma.
+ *  Fuera las de inversión, donde `realSavings` YA es el aportado: restarlo otra vez lo contaría dos veces. */
+const liabilityContributed = (pairs: MonthPair[]) => comparable(pairs).reduce((total, {account, contributed}) => total + (account.nature === 'liability' && !account.isInvestment ? contributed : 0), 0);
+export interface Unclassified { amount: number; realSavings: number; accountingSavings: number; liabilityContributed: number }
+/** El descuadre entre lo que dicen los saldos y lo que dicen los movimientos:
+ *
+ *      sin clasificar = ahorro real − ahorro contable − principal amortizado de los pasivos
+ *
+ *  Es la primera medida de si los movimientos están completos: hasta ahora, olvidarse de 300 € de
+ *  gastos hacía que `summary()` dijera que ahorraste 300 € de más y nada lo contradecía. **Se muestra,
+ *  no se corrige**: generar un movimiento de ajuste falsearía las categorías y contaminaría
+ *  `categoryData()`, `weeklyBreakdown()` y `trendData()`.
+ *  El ahorro real se toma tal cual de `monthDelta` en vez de recalcularse, porque dos cálculos
+ *  paralelos de la misma variación acabarían divergiendo y romperían la identidad Δ = ahorro + rentabilidad.
+ *  Por qué el aportado de un pasivo va restando y no sumando al ahorro real: la variación de la deuda
+ *  ya cuenta ese principal, así que sumarlo sería contarlo dos veces; lo que corrige es el lado
+ *  **contable**, donde la cuota entera se registró como gasto cuando una parte era ahorro.
+ *  `null` cuando `monthDelta` no tiene con qué comparar: la UI pinta "—", nunca un 0. */
+export function unclassified(accounts: Account[], closings: Closing[], movements: Movement[], month: string): Unclassified|null {
+  const delta = monthDelta(accounts, closings, month);
+  if (!delta) return null;
+  // La única unión permitida entre el mundo mes ('YYYY-MM') y el mundo fecha: los movimientos viven en
+  // días y hay que llevarlos al mes del cierre. Es el único sitio del bloque que llama a `filterPeriod`.
+  const accountingSavings = summary(filterPeriod(movements, `${month}-01`, 'month')).savings;
+  const contributed = liabilityContributed(monthPairs(accounts, closings, month));
+  return { amount: delta.realSavings - accountingSavings - contributed, realSavings: delta.realSavings, accountingSavings, liabilityContributed: contributed };
+}
+/** Los meses sin **ningún** cierre revisado, caminando hacia atrás desde `from` y parando en el último
+ *  mes que sí se cerró. En orden ascendente, para que el `[0]` sea el más antiguo pendiente y el aviso
+ *  pueda llevar ahí directamente. Devuelve `[]` si no hay ni un cierre con saldo: sin histórico no hay
+ *  racha de la que avisar (la pantalla vacía ya se explica sola), y de paso es lo que acota el bucle.
+ *  La UI le pasa el mes **anterior** al actual: avisar del mes en curso daría la lata desde el día 1.
+ *  Los huecos anteriores al último mes cerrado no salen aquí; esos los enseña la serie del gráfico. */
+export function monthsWithoutClosing(closings: Closing[], from: string): string[] {
+  const reviewed = closings.filter((closing) => closing.balance !== null).map((closing) => closing.month).sort();
+  const last = reviewed.at(-1);
+  if (!last) return [];
+  const missing: string[] = [];
+  for (let month = from; month > last; month = previousMonth(month)) missing.push(month);
+  return missing.reverse();
+}

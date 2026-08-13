@@ -78,7 +78,7 @@ function Finances() {
     {page==='summary'&&<Summary prefs={prefs} setPrefs={setPrefs} totals={totals} items={inPeriod} categories={categories}/>}
     {page==='weekly'&&<Weekly prefs={prefs} setPrefs={setPrefs} movements={movements} categories={categories}/>}
     {page==='movements'&&<Movements items={movements} categories={categories} onEdit={openForm} onDelete={deleteOne}/>}
-    {page==='patrimonio'&&<Patrimonio accounts={accounts} closings={closings} reload={reload} onNotice={flash}/>}
+    {page==='patrimonio'&&<Patrimonio accounts={accounts} closings={closings} movements={movements} reload={reload} onNotice={flash}/>}
     {page==='categories'&&<Categories categories={categories} reload={reload} onNotice={flash}/>}
     </main><div className="mobile-nav">{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/><small>{label}</small></button>)}</div>
     {modal&&<MovementModal initial={editing} categories={categories} onClose={()=>setModal(false)} onSave={onSaved}/>}<div className="sr-live" aria-live="polite">{notice}</div>{notice&&<div className="toast">{notice}</div>}
