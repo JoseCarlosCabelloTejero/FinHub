@@ -142,8 +142,19 @@ function monthPairs(accounts: Account[], closings: Closing[], month: string): Mo
   const at = (accountId: string, target: string) => closings.find((closing) => closing.accountId === accountId && closing.month === target && closing.balance !== null);
   return accounts.map((account) => { const end = at(account.id, month); return { account, start: at(account.id, previous)?.balance ?? null, end: end?.balance ?? null, contributed: end?.contributed ?? 0 }; });
 }
+type ClosedPair = MonthPair & { start: number; end: number };
 /** Las cuentas comparables: las que tienen saldo en los dos meses. El resto no entra en ninguna cifra. */
-const comparable = (pairs: MonthPair[]) => pairs.filter((pair): pair is MonthPair & {start: number; end: number} => pair.start !== null && pair.end !== null);
+const comparable = (pairs: MonthPair[]) => pairs.filter((pair): pair is ClosedPair => pair.start !== null && pair.end !== null);
+/** Lo que una cuenta pone en el ahorro real: la variación entera si no es de inversión, y solo el
+ *  aportado si lo es. Los 1.000 € que van de la corriente al broker se cancelan solos —bajan una y
+ *  suben el aportado de la otra—, que es justo lo que se busca: mover dinero no te hace más rico. */
+const savingsTerm = ({account, start, end, contributed}: ClosedPair) => (account.isInvestment ? contributed : end - start) * sign(account);
+/** Lo que una cuenta corrige del ahorro **contable**: en un pasivo, el principal amortizado, que se
+ *  registró entero como gasto aunque una parte fuera ahorro. Nunca suma al real (la variación de la
+ *  deuda ya lo cuenta), y fuera las de inversión, donde el ahorro real ya **es** el aportado.
+ *  Estos dos términos los comparten `monthDelta`, `unclassified` y `unclassifiedByAccount`: si cada uno
+ *  los recalculara por su cuenta, el reparto dejaría de sumar el total. */
+const correctionTerm = ({account, contributed}: ClosedPair) => (account.nature === 'liability' && !account.isInvestment ? contributed : 0);
 export interface AccountReturn { accountId: string; name: string; contributed: number; returns: number }
 /** Lo que puso el mercado en cada cuenta de inversión: fin − inicio − aportado. En **euros y jamás en
  *  porcentaje** —el porcentaje ingenuo miente cuando las aportaciones se concentran en el tiempo, y es
@@ -165,23 +176,19 @@ export function monthDelta(accounts: Account[], closings: Closing[], month: stri
   const pairs = monthPairs(accounts, closings, month);
   const both = comparable(pairs);
   if (!both.length) return null;
-  // El ahorro es lo que pusiste tú: la variación entera de las cuentas que no son de inversión, y solo
-  // el aportado en las que sí. Los 1.000 € que van de la corriente al broker se cancelan solos —bajan
-  // una y suben el aportado de la otra—, que es justo lo que se busca: mover dinero no te hace más rico.
   // La identidad Δ = ahorro + rentabilidad se cumple **por construcción**: es el mismo sumatorio
   // Σ (fin − inicio) · signo partido en dos, así que el reparto no puede descuadrar.
   return {
     delta: both.reduce((total, {account, start, end}) => total + (end - start) * sign(account), 0),
-    realSavings: both.reduce((total, {account, start, end, contributed}) => total + (account.isInvestment ? contributed : end - start) * sign(account), 0),
+    realSavings: both.reduce((total, pair) => total + savingsTerm(pair), 0),
     returns: investmentReturns(accounts, closings, month).reduce((total, row) => total + row.returns, 0),
     complete: !pairs.some((pair) => (pair.start === null) !== (pair.end === null)),
   };
 }
-/** El aportado de los pasivos, que en un pasivo significa "principal amortizado".
- *  Sale de las mismas parejas que `monthDelta` y no de filtrar los cierres del mes: una cuenta que no
- *  entra en el ahorro real tampoco puede corregirlo, y colarla metería una corrección fantasma.
- *  Fuera las de inversión, donde `realSavings` YA es el aportado: restarlo otra vez lo contaría dos veces. */
-const liabilityContributed = (pairs: MonthPair[]) => comparable(pairs).reduce((total, {account, contributed}) => total + (account.nature === 'liability' && !account.isInvestment ? contributed : 0), 0);
+/** El principal amortizado del mes. Sale de las mismas parejas que `monthDelta` y no de filtrar los
+ *  cierres del mes: una cuenta que no entra en el ahorro real tampoco puede corregirlo, y colarla
+ *  metería una corrección fantasma. */
+const liabilityContributed = (pairs: MonthPair[]) => comparable(pairs).reduce((total, pair) => total + correctionTerm(pair), 0);
 export interface Unclassified { amount: number; realSavings: number; accountingSavings: number; liabilityContributed: number }
 /** El descuadre entre lo que dicen los saldos y lo que dicen los movimientos:
  *
@@ -205,6 +212,38 @@ export function unclassified(accounts: Account[], closings: Closing[], movements
   const accountingSavings = summary(filterPeriod(movements, `${month}-01`, 'month')).savings;
   const contributed = liabilityContributed(monthPairs(accounts, closings, month));
   return { amount: delta.realSavings - accountingSavings - contributed, realSavings: delta.realSavings, accountingSavings, liabilityContributed: contributed };
+}
+export interface AccountUnclassified { accountId: string|null; name: string; realSavings: number; accountingSavings: number; amount: number }
+/** El descuadre repartido por cuenta, para **localizar** lo que falta: si sobran 300 €, saber en qué
+ *  cuenta reduce mucho la búsqueda del movimiento. Nunca dice *qué* movimiento falta, solo cuánto y dónde.
+ *  El invariante que lo sostiene, y que tiene test: **las filas suman exactamente `unclassified().amount`**.
+ *  De ahí que entre una fila por cada cuenta comparable *o* con movimientos vinculados, y que la fila
+ *  sentinel "Sin cuenta" sea `−ahorro contable de los movimientos sueltos`: ese dinero está en el total
+ *  global y tiene que aparecer en algún sitio. Un `accountId` que ya no resuelve cae ahí también, igual
+ *  que hace `repairDanglingRefs` al subir.
+ *  El reparto es **parcial y así se presenta**: mientras solo una parte de los movimientos lleve cuenta
+ *  la cifra por cuenta es una ayuda de diagnóstico, y un traspaso entre cuentas propias —que el modelo
+ *  no representa— sale como descuadre negativo en la de origen y positivo en la de destino. Se cancelan
+ *  en el total, que es lo que se publica. */
+export function unclassifiedByAccount(accounts: Account[], closings: Closing[], movements: Movement[], month: string): AccountUnclassified[]|null {
+  if (!monthDelta(accounts, closings, month)) return null;
+  const items = filterPeriod(movements, `${month}-01`, 'month');
+  const known = new Set(accounts.map((account) => account.id));
+  const byAccount = new Map(comparable(monthPairs(accounts, closings, month)).map((pair) => [pair.account.id, pair]));
+  const rows: AccountUnclassified[] = [];
+  for (const account of accounts) {
+    const pair = byAccount.get(account.id);
+    const own = items.filter((movement) => movement.accountId === account.id);
+    // Una cuenta que no entra en el ahorro real y encima no tiene movimientos no aporta nada al
+    // reparto: una fila de ceros solo sería ruido.
+    if (!pair && !own.length) continue;
+    const realSavings = pair ? savingsTerm(pair) - correctionTerm(pair) : 0;
+    const accountingSavings = summary(own).savings;
+    rows.push({ accountId: account.id, name: account.name, realSavings, accountingSavings, amount: realSavings - accountingSavings });
+  }
+  const loose = items.filter((movement) => !movement.accountId || !known.has(movement.accountId));
+  if (loose.length) { const accountingSavings = summary(loose).savings; rows.push({ accountId: null, name: 'Sin cuenta', realSavings: 0, accountingSavings, amount: -accountingSavings }); }
+  return rows;
 }
 /** Los meses sin **ningún** cierre revisado, caminando hacia atrás desde `from` y parando en el último
  *  mes que sí se cerró. En orden ascendente, para que el `[0]` sea el más antiguo pendiente y el aviso
