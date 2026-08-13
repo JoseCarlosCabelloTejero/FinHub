@@ -5,11 +5,11 @@ up: "[[00-index]]"
 
 # Dominio: patrimonio
 
-> ⚠️ **Parcialmente implementado.** Funcionan el MVP y la evolución: cuentas, cierres mensuales,
-> patrimonio neto, disponible, **Δ mensual con el reparto ahorro/rentabilidad y su gráfico** (fases
-> F1a-F1b-F2). Las decisiones grandes están extraídas en [[009-la-foto-manda-cierre-mensual]].
-> **Siguen siendo diseño** el descuadre "sin clasificar" (secciones 6-7, F3) y la vinculación de
-> movimientos a una cuenta (sección 8, F4).
+> ⚠️ **Parcialmente implementado.** Funcionan el MVP, la evolución y el descuadre: cuentas, cierres
+> mensuales, patrimonio neto, disponible, **Δ mensual con el reparto ahorro/rentabilidad y su gráfico**
+> y el **"sin clasificar"** con su aviso (fases F1a-F1b-F2-F3). Las decisiones grandes están extraídas
+> en [[009-la-foto-manda-cierre-mensual]]. **Sigue siendo diseño** la vinculación de movimientos a una
+> cuenta (sección 8, F4).
 
 La app registraba **flujos**: gastos e ingresos con sus categorías, porcentajes y gráficos. No sabía
 **cuánto dinero existe** ni dónde está. Este dominio añade la dimensión que faltaba: **saldo**.
@@ -149,7 +149,7 @@ flowchart TB
 | **Disponible mañana** | Σ cuentas líquidas, con su signo | 2 | ✅ `available()` |
 | **Ahorro real** | Variación de las cuentas no de inversión + aportado a las de inversión | 3 | ✅ `monthDelta()` |
 | **Rentabilidad del mes** | Saldo final − saldo inicial − aportado, en cada cuenta de inversión | 3 | ✅ `investmentReturns()` |
-| **Descuadre** | Ahorro real − ahorro contable | (lo que hace fiable todo lo demás) | F3 |
+| **Descuadre** | Ahorro real − ahorro contable − principal amortizado | (lo que hace fiable todo lo demás) | ✅ `unclassified()` |
 
 Todas viven en [[calculations]]. **El saldo se muestra en gris y la variación en verde/rojo**: el nivel no
 es flujo, el Δ sí → [[design-system]]. El Δ compara siempre contra el **mes anterior** —nunca contra el
@@ -213,15 +213,17 @@ préstamo. Hay dos salidas y las dos son legítimas:
 - **Rellenarla.** El mismo campo *aportado* sirve en un pasivo, donde significa "principal amortizado
   este mes". Coste: mirar el cuadro de amortización del banco una vez al mes.
 
-El modelo no fuerza ninguna de las dos, porque son el mismo campo.
+El modelo no fuerza ninguna de las dos, porque son el mismo campo. Cómo entra ese número en la cuenta
+—**corrige el lado contable, no suma al ahorro real**— está en [[calculations]] y en
+[[009-la-foto-manda-cierre-mensual]]; el ejemplo de arriba es su test.
 
 ## 7. El descuadre es la funcionalidad, no el bug
 
-Hoy no existe **ninguna** forma de saber si los movimientos están completos. Si un mes te olvidas de
+Sin él no existe **ninguna** forma de saber si los movimientos están completos. Si un mes te olvidas de
 registrar 300 € de gastos, `summary()` dice que ahorraste 300 € de más y nada lo contradice. El descuadre
-es la primera medida real de esa laguna → [[calculations]]
+es la primera medida real de esa laguna → [[calculations]] · [[ui-app]]
 
-De ahí tres reglas de diseño:
+De ahí tres reglas de diseño, y las tres están aplicadas:
 
 1. **Se muestra, no se corrige.** La tentación de cuadrarlo generando un movimiento de ajuste automático
    se rechaza: falsearía las categorías y contaminaría `categoryData()`, `weeklyBreakdown()` y los
@@ -284,9 +286,10 @@ del diseño y no un detalle posterior. Está implementado en la subvista *Cierre
   una ausencia. Por eso este dominio no necesita lápidas → [[009-la-foto-manda-cierre-mensual]]
 
 Ya aplicado: **los meses sin cierre no se interpolan** en el gráfico —la serie tiene un hueco, porque
-interpolar inventaría rentabilidad que nadie ganó— y un mes al que le falten cuentas sale del Δ con su
-aviso de "mes incompleto". Pendiente de F3: el **aviso discreto** si el mes anterior no tiene cierre (nada
-de notificaciones push).
+interpolar inventaría rentabilidad que nadie ganó—, un mes al que le falten cuentas sale del Δ con su
+aviso de "mes incompleto", y hay un **aviso discreto** en la subvista *Nivel* cuando quedan meses sin
+cerrar, con un botón que abre el más antiguo pendiente. Nada de notificaciones push. Cuenta desde el mes
+**anterior** al actual: el mes en curso todavía no toca cerrarlo → [[ui-app]]
 
 ## 11. Qué le exige este dominio al sync
 

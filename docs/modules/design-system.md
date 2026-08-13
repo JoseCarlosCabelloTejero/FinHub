@@ -70,9 +70,9 @@ bueno.
   - Esto **extiende** el enunciado de "verde = ingreso, rojo = gasto", no lo rompe: la frontera nunca fue
     ingreso/gasto contra el resto, sino **flujo contra nivel**. Lo que sigue prohibido es pintar de rojo
     algo que no es flujo (un error de sync, un pasivo, un descuadre).
-- **El "sin clasificar" de F3 va en gris**, aunque sea una diferencia entre dos flujos: es un aviso, no
-  una mejora ni un empeoramiento, y un número que te riñe en rojo todos los meses es un módulo que se
-  abandona → [[patrimonio]]
+- **El "sin clasificar" va en gris** (`.unclassified > strong`), aunque sea una diferencia entre dos
+  flujos: es un aviso, no una mejora ni un empeoramiento, y un número que te riñe en rojo todos los meses
+  es un módulo que se abandona → [[patrimonio]] · [[ui-app]]
 - El color y el icono son **siempre redundancia**: el texto ya lleva el significado completo (regla que
   se ve explícita en `syncCopy.ts`).
 
