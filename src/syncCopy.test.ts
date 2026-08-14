@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { syncCopy } from './syncCopy';
+import { needsAttention, syncCopy } from './syncCopy';
 import type { SyncState } from './types';
 
 const state = (patch: Partial<SyncState> = {}): SyncState => ({ status: 'idle', pendingOps: 0, lastSyncAt: null, lastError: null, ...patch });
@@ -25,6 +25,12 @@ describe('texto del estado de sync', () => {
   it('cuenta los cambios pendientes en singular y en plural', () => {
     expect(syncCopy(state({ pendingOps: 1 })).label).toBe('1 cambio pendiente');
     expect(syncCopy(state({ pendingOps: 4 })).label).toBe('4 cambios pendientes');
+  });
+
+  it('el modo demo dice dónde acaban los datos y no pide atención', () => {
+    expect(syncCopy(state({ status: 'demo' }))).toEqual({ label: 'Modo demo', detail: 'Los datos solo se guardan en este navegador. No se sube nada a la nube.' });
+    // No es una avería: el tono de aviso está reservado a lo que la persona tiene que arreglar.
+    expect(needsAttention(state({ status: 'demo' }))).toBe(false);
   });
 
   it('al día, con y sin sincronización previa', () => {

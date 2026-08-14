@@ -219,6 +219,13 @@ nav svg { width: 19px }
   border-color: var(--line-control);
   background: var(--surface);
 }
+/* El chip de la cabecera es además el botón que abre la nota (`.session-sheet`), porque en móvil el
+   aside no existe. No cambia de aspecto al hacerse botón —los resets globales ya heredan la fuente— y
+   solo gana la respuesta al hover; el foco lo pone el `:focus-visible` único de arriba. */
+button.sync-chip:hover {
+  color: var(--text);
+  border-color: var(--line-control);
+}
 
 .aside-note .sync-line {
   display: flex;
@@ -594,6 +601,18 @@ td small { display: block; color: var(--muted); margin-top: 3px }
   padding: 26px;
 }
 .modal-head { display: flex; justify-content: space-between }
+/* Hereda de `.modal` lo que importa: centrada en escritorio y hoja que sube desde abajo en móvil. Solo
+   cambia el ancho, porque el contenido es una nota corta y no un formulario. */
+.modal.session-sheet { width: min(380px, 100%) }
+/* Dentro del diálogo la nota ya no es un recuadro suelto al pie del aside: sin `margin-top: auto` (que
+   ahí la empuja abajo) y sin su propia caja, que sería una tarjeta dentro de otra. */
+.session-sheet .aside-note {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
 .modal h2 { margin: 4px 0 22px }
 .modal form > label, .form-grid label {
   display: grid;
@@ -662,7 +681,11 @@ td small { display: block; color: var(--muted); margin-top: 3px }
   margin: 14px 0;
 }
 .login .primary { width: 100%; margin-top: 18px }
-.login .primary:disabled { opacity: .6; cursor: default }
+/* Ancho completo también en el de la demo: son dos caminos hermanos hacia la app, no uno principal y
+   uno accesorio. A media anchura se leería como un enlace de ayuda. */
+.login .secondary { width: 100%; margin-top: 10px }
+.login .primary:disabled, .login .secondary:disabled { opacity: .6; cursor: default }
+.login-note { color: var(--muted); font-size: 12px; text-align: center; margin-top: 12px }
 
 /* ============================= Toast ============================= */
 
@@ -979,6 +1002,9 @@ td small { display: block; color: var(--muted); margin-top: 3px }
     border-bottom: 0;
     padding: 20px 16px 0;
   }
+  /* La hoja de sesión no tiene pie sticky, así que el área segura la pone ella: si no, el `padding: 0`
+     de abajo de `.modal` dejaría "Cerrar sesión" pegado al indicador de inicio del móvil. */
+  .modal.session-sheet { padding-bottom: calc(20px + env(safe-area-inset-bottom)) }
   /* El área segura va en el padding del pie, no en el del modal: el sticky se ancla al borde
      del padding-box, así que con el hueco abajo del modal quedaría por debajo del indicador. */
   .form-actions {

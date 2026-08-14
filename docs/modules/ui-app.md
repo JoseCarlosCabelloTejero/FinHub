@@ -21,8 +21,9 @@ dos el contrato de markup que espera la CSS.
 
 ```mermaid
 flowchart TD
-    App["App — gate de sesión"] -->|"userId === undefined"| Load["'Comprobando tu sesión…'"]
-    App -->|"userId === null"| Login["Login"]
+    App["App — gate de sesión"] -->|"isDemo()"| Demo["Finances key='demo'"]
+    App -->|"userId === undefined"| Load["'Comprobando tu sesión…'"]
+    App -->|"userId === null"| Login["Login (+ 'Probar la demo')"]
     App -->|"userId"| Fin["Finances key={userId}"]
     Fin --> Aside["aside: nav + SyncNote"]
     Fin --> Header["header: SyncChip + 'Nuevo movimiento'"]
@@ -30,6 +31,7 @@ flowchart TD
     Fin --> Pat["Patrimonio"]
     Pat --> PatViews["Nivel · Cierre mensual · Cuentas"]
     PatViews -->|"lazy + Suspense"| NetChart["NetWorthChart (Charts.tsx)"]
+    Header -->|"el chip abre"| Sheet["SessionSheet → SyncNote"]
     Fin --> Modals["MovementModal · CategoryModal · AccountModal"]
     Fin --> Live["región aria-live + toast"]
 ```
@@ -51,6 +53,15 @@ login. **La suscripción manda**; `resolveUserId` solo rellena el hueco inicial.
 
 `key={userId}` en `Finances`: cambiar de usuario **remonta el árbol entero**, así ningún estado
 sobrevive al cambio. → [[login]]
+
+El gate tiene una **tercera rama, la primera de todas**: `if (isDemo()) return <Finances key="demo"/>`.
+El guard de `isDemo()` se repite **dentro** del efecto para no llamar a `resolveUserId()` ni suscribirse a
+`onAuthChange` —los hooks no pueden ser condicionales—, así que en demo no se toca `supabase.auth`.
+
+En el arranque de `Finances` hay un cuarto detalle propio de la demo: `consumeDemoReset()` se llama
+**síncrono, fuera del IIFE async**, porque el doble montaje de StrictMode entraría dos veces y sembraría
+el decorado por duplicado. Y el `onSignOut` del aside apunta a `leaveDemo()` en vez de a `signOut()`.
+→ [[010-modo-demo]]
 
 ## Estado centralizado, sin store ni context
 
@@ -81,7 +92,13 @@ props al `SyncChip` (cabecera) y al `SyncNote` (aside). `SyncStatus.tsx` **no im
 al importarse sin `.env.local`) y renderizar el indicador dos veces no duplica suscripciones.
 
 El chip está en la cabecera **además** del aside porque el aside desaparece por debajo de 760 px, que es
-justo el caso en el que saber si el móvil ha sincronizado importa más.
+justo el caso en el que saber si el móvil ha sincronizado importa más. Ese mismo chip es el indicador
+permanente de "estás en la demo" (`status: 'demo'` → "Modo demo"): no hay banner aparte porque el chip ya
+está en las dos piezas de chrome que sobreviven a cualquier tamaño de pantalla. Y es también el botón que
+abre `SessionSheet` (ver abajo), que es la única forma de salir en móvil.
+
+En demo, `SyncNote` sigue recibiendo solo el estado y deduce el modo de `state.status === 'demo'`, sin
+importar `./demo`: es lo que mantiene la propiedad de arriba.
 
 Los avisos salen de la **propia suscripción**, no de un efecto sobre `sync`: así se ve el estado
 anterior y el nuevo sin compararlos entre renders. Solo se anuncia lo que **no** se deduce de la
@@ -208,8 +225,8 @@ pelearse con esa rejilla.
 
 ## Modales
 
-Los tres (`MovementModal`, `CategoryModal`, `AccountModal`) comparten el mismo patrón, y sus tres detalles
-son intencionados:
+Los tres de formulario (`MovementModal`, `CategoryModal`, `AccountModal`) y la hoja de sesión
+(`SessionSheet`) comparten el mismo patrón, y sus tres detalles son intencionados:
 
 - **El foco va al diálogo, no al primer input**: con `autoFocus` en el campo, el móvil abre el teclado
   nada más montar y empuja el formulario fuera de vista.
@@ -220,7 +237,26 @@ son intencionados:
   Rearmar solo el listener es inocuo.
 
 Cierran con `Escape` y con clic en el backdrop (`onMouseDown` comparando `target === currentTarget`).
-Llevan `role="dialog"`, `aria-modal` y `aria-labelledby`.
+Llevan `role="dialog"`, `aria-modal` y `aria-labelledby` (`SessionSheet`, `aria-label`: su contenido ya
+trae encabezado propio y no había a qué apuntar).
+
+`SessionSheet` es la nota del aside alcanzable desde la cabecera, y existe **por el móvil**: por debajo de
+760 px el aside no está, y con él desaparecía la única salida de la sesión y de la demo. Detalles:
+
+- La abre el propio `SyncChip`, al que se le pasa `onOpen`. **El chip es el disclosure**: así la cabecera
+  no gana un control más en 320 px, el nombre accesible del botón es el estado que se pulsa ("Modo demo",
+  "Sin conexión") y el `detail` —que solo vivía en el `title`, inalcanzable en una pantalla táctil— pasa a
+  tener sitio donde leerse. Sin `onOpen`, `SyncChip` sigue siendo un `<span>` informativo.
+- Reutiliza `.modal`, que **por debajo de 760 px ya sube desde abajo** como una hoja: no hay layout nuevo,
+  solo el ancho y el hueco del área segura (que en los modales de formulario lo pone el pie sticky).
+- Renderiza `SyncNote` tal cual en vez de repetir su copy. Que el estado y la salida vivan en **un solo
+  componente** es lo que impide que el aside y la hoja se digan cosas distintas.
+- El paso extra (pulsar el chip) es deliberado: cerrar sesión o salir de la demo son irreversibles, y un
+  icono suelto en la cabecera —a 8 px del botón de "Nuevo movimiento"— se pulsa sin querer. La barra de
+  abajo se queda solo con destinos, que es para lo que es.
+- **Devuelve el foco al chip al cerrarse**, que es lo único en lo que se sale del patrón de los tres
+  modales de formulario: su disparador sigue en pantalla, y con el teclado quedarse en el `body` obliga a
+  recorrer la página otra vez.
 
 En `MovementModal`, el `<select>` de **Cuenta** repite el patrón del de categorías: las activas **más la
 archivada que ya tuviera el movimiento en edición**, o editar un movimiento viejo le cambiaría la cuenta
@@ -242,4 +278,4 @@ arreglarse—, y no hay nada que migrar al cambiarla porque todas las cifras son
 - Acciones destructivas confirman (borrar un movimiento: una; "Borrar todo": dos).
 - No rompas la accesibilidad ya establecida → [[design-system]].
 
-Related: [[sync]] · [[calculations]] · [[charts]] · [[design-system]] · [[patrimonio]] · [[preferencias]]
+Related: [[sync]] · [[calculations]] · [[charts]] · [[design-system]] · [[patrimonio]] · [[preferencias]] · [[010-modo-demo]]

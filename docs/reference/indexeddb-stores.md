@@ -8,6 +8,10 @@ up: "[[00-index]]"
 Base **`finhub-finanzas`**, versión **4**. Nombre anterior (marca "Cielo"): `cielo-finanzas`, del que se
 copia una sola vez → [[migraciones-idb]].
 
+El modo demo usa una **base distinta con el mismo esquema**, `finhub-demo`, y ahí no se copia nada de la
+marca anterior. Es el aislamiento que impide que los datos de prueba se mezclen con los tuyos o acaben
+subidos → [[010-modo-demo]].
+
 **Fuente de verdad**: `interface FinanceDB` en `src/db.ts`
 
 ## Stores
@@ -80,6 +84,10 @@ repoblaría el servidor recién vaciado. → [[borrado-total]]
 
 DevTools → **Application** → **IndexedDB** → `finhub-finanzas`. Los dos stores interesantes al depurar un
 problema de sync son **`outbox`** (¿qué hay sin subir?) y **`meta`** (¿está vinculado? ¿qué epoch tiene?).
+
+Si aparecen **dos bases**, la segunda es la demo. Es también la comprobación de un vistazo de que el
+aislamiento funciona: probar la demo no debe tocar ni una fila de `finhub-finanzas`, y su `outbox` tiene
+que quedarse siempre vacío.
 
 En tests, `fake-indexeddb/auto` desde `src/test/setup.ts` y `clearAllData()` en `beforeEach`.
 → [[testing]]

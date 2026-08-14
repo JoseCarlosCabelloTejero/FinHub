@@ -1,5 +1,6 @@
 import { openDB, type DBSchema } from 'idb';
 import { defaultCategories, EPOCH_UPDATED_AT } from './data';
+import { DEMO_DB_NAME, isDemo } from './demo';
 import type { Account, Category, Closing, Movement, OutboxOp, Preferences, SyncMeta } from './types';
 
 interface FinanceDB extends DBSchema {
@@ -19,7 +20,10 @@ interface FinanceDB extends DBSchema {
 // de migración, no parte del modelo, así que no vive en types.ts.
 type LegacyCategory = Omit<Category, 'updatedAt' | 'subcategories'> & { updatedAt?: string; subcategories: (Omit<Category['subcategories'][number], 'updatedAt'> & { updatedAt?: string })[] };
 
-const DB_NAME = 'finhub-finanzas';
+// El modo demo usa una base distinta y por eso el nombre se decide aquí, en el import: dbPromise se
+// abre como efecto de módulo, así que cuando React puede leer la marca ya es tarde. Es también la
+// garantía de que los datos de prueba no pueden mezclarse con los reales ni acabar subidos.
+const DB_NAME = isDemo() ? DEMO_DB_NAME : 'finhub-finanzas';
 // Nombre de la base bajo la marca anterior ("Cielo"). IndexedDB no tiene "rename": un nombre nuevo
 // es una base vacía. migrateFromLegacyDb copia los datos una sola vez para no dejar huérfano el
 // histórico de quien ya tuviera movimientos guardados antes del cambio de marca.
@@ -60,7 +64,9 @@ export const dbPromise = openDB<FinanceDB>(DB_NAME, 4, {
       db.createObjectStore('closings', { keyPath: 'id' });
     }
   },
-}).then(async (db) => { if (isFreshDb) await migrateFromLegacyDb(db); return db; });
+// El `!isDemo()` no es de adorno: la base de la demo nace vacía, así que abre con oldVersion 0 y sin
+// esto la copia de la marca antigua le metería dentro los movimientos, el outbox y el meta REALES.
+}).then(async (db) => { if (isFreshDb && !isDemo()) await migrateFromLegacyDb(db); return db; });
 
 // Copia única de 'cielo-finanzas' a 'finhub-finanzas' cuando esta última se acaba de crear.
 // indexedDB.databases() es necesario para comprobar que la base antigua existe SIN abrirla: abrir

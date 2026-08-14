@@ -128,6 +128,20 @@ aparece por ninguna parte**: se escribe en IndexedDB, se encola, y lo encolado s
 
 Después de encolar, `enqueue()` actualiza `pendingOps` y llama a `scheduleSync()` (debounce de 800 ms).
 
+## Modo demo: los cuatro guards
+
+En demo el módulo se apaga entero. Los cuatro sitios donde se comprueba `isDemo()`, en orden de importancia:
+
+| Punto | Qué hace | Por qué ahí |
+|---|---|---|
+| `enqueue()` | Sale **antes** de `enqueueOutbox` | Es el embudo de las cinco `*Synced`, así que es el guard que de verdad aísla la demo. Encolar sin poder subir dejaría el outbox creciendo sin fin y el indicador diciendo "N cambios pendientes" para siempre |
+| `initSync()` | Fija `status: 'demo'` y devuelve un no-op | Ni disparadores, ni sondeo, ni primera vinculación. Dentro de `initSync` y no en [[ui-app]] para que siga habiendo **un único** punto de arranque |
+| `runSync()` | Sale antes incluso de mirar la red | `syncNow` es público, y de aquí cuelgan el RPC del wipe epoch y `adoptUser`, que es destructivo |
+| `clearAllDataSynced()` | Borra en local y no llama al RPC | Es la única `*Synced` que se salta `enqueue` y habla con el servidor en línea |
+
+Lo que **no** se toca: `nextStamp()` sigue sellando y escribiendo `meta.lastStampAt`, en la base demo. Es
+inofensivo y preserva el invariante de que un solo sitio decide los sellos. → [[010-modo-demo]]
+
 ## Push
 
 ```ts
@@ -168,6 +182,7 @@ no el cliente.
 
 El orden **no es negociable**:
 
+0. En demo, fuera antes de todo lo demás (ver arriba).
 1. Sin red → `offline`, fuera. Sin `userId` → `auth-required`, fuera.
 2. `adoptUser(userId)` — ¿la caché es de otro usuario? → [[login]]
 3. `adoptWipeEpoch(...)` — ¿alguien hizo "Borrar todo"? **Antes del push.** → [[borrado-total]]
@@ -191,4 +206,4 @@ propósito → [[004-sin-realtime]].
 `useSyncExternalStore`. Invoca el callback de inmediato con el estado actual. El copy de cada estado
 vive en `src/syncCopy.ts` → [[design-system]].
 
-Related: [[db]] · [[sync-model]] · [[first-sync]] · [[pull]] · [[escritura-local]] · [[postgres-schema]] · [[testing]]
+Related: [[db]] · [[sync-model]] · [[first-sync]] · [[pull]] · [[escritura-local]] · [[postgres-schema]] · [[testing]] · [[010-modo-demo]]

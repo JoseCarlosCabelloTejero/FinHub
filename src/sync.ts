@@ -1,5 +1,6 @@
 import { bootstrapData, clearAllData, clearOutbox, deleteOutboxOp, enqueueOutbox, getAllData, getCategory, getSyncMeta, readOutbox, removeMovement, replaceLocalData, saveAccount, saveCategory, saveClosing, saveMovement, saveSyncMeta } from './db';
 import { EPOCH_UPDATED_AT } from './data';
+import { isDemo } from './demo';
 import { resolveUserId, supabase } from './supabase';
 import type { Account, AccountNature, Category, Closing, Movement, MovementType, OutboxOp, Subcategory, SyncState } from './types';
 
@@ -227,6 +228,11 @@ async function nextStamp() {
 // aparece por ninguna parte: lo que se encola aquí se sube cuando se pueda, y mientras tanto la app
 // funciona igual sin conexión.
 async function enqueue(ops: OutboxOp[]) {
+  // Modo demo: la escritura local ya está hecha y no hay servidor al que subirla. Ni se encola —el
+  // outbox crecería sin fin y el indicador diría "N cambios pendientes" para siempre— ni se programa
+  // sync. Como es el embudo por el que pasan las cinco escrituras, este guard es el que de verdad
+  // garantiza que la demo no manda nada; los de runSync e initSync son la red de seguridad.
+  if (isDemo()) return;
   if (ops.length) await enqueueOutbox(ops);
   setState({ pendingOps: (await readOutbox()).length });
   scheduleSync();
@@ -272,6 +278,10 @@ export async function saveClosingSynced(closing: Closing) {
 // repoblaría lo que se acaba de vaciar. Hacerlo en el servidor primero incrementa el wipe_epoch, que
 // es lo que hace que los demás dispositivos tiren su cola en vez de resucitar los datos.
 export async function clearAllDataSynced() {
+  // La única *Synced que se salta enqueue y llama al servidor en línea, así que necesita su propio
+  // guard. En demo se borra a vacío y punto: no se resiembran los datos de ejemplo, porque "he
+  // borrado todo y sigue lleno" sería incomprensible.
+  if (isDemo()) { await clearAllData(); setState({ pendingOps: 0, lastError: null }); return }
   const userId = await resolveUserId();
   const { data, error } = await supabase.rpc('wipe_all_data');
   if (error) throw new Error('Necesitas conexión para borrar todo');
@@ -487,6 +497,10 @@ export function syncNow(): Promise<void> {
 }
 
 async function runSync() {
+  // Antes que nada, incluso antes de mirar la red: syncNow es público y de aquí cuelgan el RPC del
+  // wipe_epoch y adoptUser, que es destructivo. En demo no debería llegarse nunca, y por eso mismo
+  // el guard es barato.
+  if (isDemo()) return;
   if (!navigator.onLine) { setState({ status: 'offline' }); return; }
   const userId = await resolveUserId();
   if (!userId) { setState({ status: 'auth-required' }); return; }
@@ -542,6 +556,10 @@ async function adoptWipeEpoch(localEpoch: number) {
 // lo cubre visibilitychange con latencia percibida cero. Un websocket añadiría reconexión y refresco
 // de token a cambio de unos segundos que esta app no necesita.
 export function initSync(onChange: () => Promise<void>) {
+  // En demo no hay motor: ni disparadores, ni sondeo, ni primera vinculación. Solo se fija el estado
+  // que lee el indicador, que aquí es informativo y no vuelve a cambiar. El guard vive dentro de
+  // initSync y no en App.tsx para que siga habiendo un único punto de arranque del sync.
+  if (isDemo()) { setState({ status: 'demo', pendingOps: 0, lastSyncAt: null, lastError: null }); return () => {}; }
   onRemoteChange = onChange;
   const wake = () => { void syncNow(); };
   const goOffline = () => setState({ status: 'offline' });

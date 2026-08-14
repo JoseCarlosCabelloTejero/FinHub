@@ -13,6 +13,10 @@ consciente a Supabase para poder usarla desde varios dispositivos. Ver [[001-loc
 funciona sin conexión; **Supabase es la fuente de verdad** y además **la puerta de acceso** — sin
 iniciar sesión no se puede usar la app.*
 
+Con una excepción acotada: el **modo demo** deja probarla sin cuenta, en una base de IndexedDB aparte y
+con el motor de sync apagado. No es una segunda forma de usar la app, es un escaparate aislado
+→ [[010-modo-demo]].
+
 **Fuente de verdad**: `src/*` · `supabase/migrations/20260808133140_schema.sql` · `README.md`
 
 ## Estado por fases

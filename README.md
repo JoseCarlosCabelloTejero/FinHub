@@ -31,6 +31,7 @@ En la práctica, hoy:
 
 - **IndexedDB** (`finhub-finanzas`) es la caché local y la cola offline; **Supabase es la fuente de verdad**. Se escribe siempre primero en local, así que la app sigue funcionando sin conexión.
 - **Supabase es además la puerta de acceso**: sin iniciar sesión no se puede usar la app. Solo hay un usuario permitido (el propietario), sin registro público.
+- **Modo demo** para probarla sin cuenta: el botón *"Probar la demo"* del login (o la URL `?demo=1`) abre la app entera con datos de ejemplo, en una base de IndexedDB aparte (`finhub-demo`) y con el sync apagado. Nada de lo que se haga ahí llega a Supabase, y los datos reales de quien ya haya entrado en ese navegador no se tocan. → [`docs/decisions/010-modo-demo.md`](./docs/decisions/010-modo-demo.md)
 - La cola (`outbox`) sube los cambios en cuanto hay red y el pull baja el estado del servidor al arrancar, al volver la conexión, al recuperar la pestaña y cada minuto. La cabecera y el aside dicen en todo momento si hay algo sin subir.
 
 Detalles de la arquitectura, patrones a respetar y comandos completos: [`CLAUDE.md`](./CLAUDE.md).

@@ -24,7 +24,7 @@ flowchart LR
     IDB -->|reload| UI
 ```
 
-## Los ocho invariantes
+## Los nueve invariantes
 
 ### 1. Local primero, siempre
 
@@ -76,6 +76,16 @@ algo que el usuario acaba de escribir. En el servidor decidirá el LWW; **en loc
 
 Corolario: **solo se hace pull con la cola vacía**.
 
+### 9. En modo demo no se encola
+
+La demo no es "un dispositivo offline": es un dispositivo **sin servidor**. La diferencia importa porque
+el modelo offline se apoya en que la cola se sube más tarde, y aquí no hay más tarde. Por eso `enqueue()`
+sale antes de escribir en el `outbox` en vez de dejarlo crecer: una cola que nunca se drena no es una
+cola pendiente, es basura que además mentiría en el indicador.
+
+Corolario: el `outbox` de la base demo está **siempre vacío**, y es la comprobación de un vistazo de que
+el aislamiento funciona. → [[010-modo-demo]]
+
 ## Granularidad del conflicto
 
 La unidad de conflicto es **la fila**, no el documento:
@@ -101,6 +111,7 @@ dos**. → [[007-subcategorias-normalizadas-en-servidor]]
 | Reparar referencias colgantes | Cliente (`repairDanglingRefs`), antes de chocar con la FK |
 | Mezclar snapshot + pendientes | Cliente (`applyPullToLocal`) |
 | Aislar los datos por usuario | **Servidor** (RLS + PK `(user_id, id)`) |
+| Aislar la demo de tus datos | Cliente (base de IndexedDB aparte + los guards de `isDemo()`) |
 
 Regla práctica: **la coherencia la garantiza el servidor; el cliente solo intenta no darle basura.**
 
@@ -113,4 +124,4 @@ Regla práctica: **la coherencia la garantiza el servidor; el cliente solo inten
   `updated_at`. → [[postgres-schema]]
 - **No hay tiempo real**: la latencia es el sondeo de 60 s o el `visibilitychange`. → [[004-sin-realtime]]
 
-Related: [[sync]] · [[first-sync]] · [[pull]] · [[escritura-local]] · [[borrado-total]] · [[postgres-schema]]
+Related: [[sync]] · [[first-sync]] · [[pull]] · [[escritura-local]] · [[borrado-total]] · [[postgres-schema]] · [[010-modo-demo]]

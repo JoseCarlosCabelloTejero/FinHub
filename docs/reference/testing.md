@@ -29,8 +29,11 @@ Los nombres de `describe`/`it` están en **español**, como el resto de lo que l
 | `db.test.ts` | Persistencia, orden del outbox, `replaceLocalData`, parches de `meta` |
 | `db.migration.test.ts` | Migración v2 → v3 |
 | `db.rename-migration.test.ts` | Copia `cielo-finanzas` → `finhub-finanzas` |
-| `Login.test.tsx` | El formulario de login (con `signIn` mockeado) |
-| `SyncStatus.test.tsx` | Chip y nota del aside a partir de un `SyncState` |
+| `db.demo.test.ts` | La demo abre `finhub-demo` y **no** hereda nada de la base del usuario |
+| `demo.test.ts` | La marca del modo demo: activar, consumir el reseteo una sola vez, `?demo=1` |
+| `demoData.test.ts` | El decorado: ids reales, fechas válidas, y **descuadre 0** en Patrimonio |
+| `Login.test.tsx` | El formulario de login (con `signIn` mockeado) y el botón de la demo |
+| `SyncStatus.test.tsx` | Chip (adorno o disclosure según `onOpen`) y nota del aside, a partir de un `SyncState` |
 
 ### Los dos ficheros de migración están aparte a propósito
 
@@ -53,6 +56,12 @@ la base). Dato práctico si añades tests ahí.
 Los sub-bloques: `escrituras`, `primera vinculación`, y casos de push (orden, fallo de red que deja la
 cola, op irrecuperable que se descarta).
 
+El bloque `modo demo` es el **último del fichero** y tiene su propio `beforeEach`: pone
+`localStorage.setItem('finhub-demo','1')` **antes** de los imports (`db.ts` elige el nombre de la base en
+el import) y lo limpia en el `afterEach`, porque `localStorage` **no** se resetea entre tests y
+contaminaría a los demás bloques. Lo que comprueba es lo que de verdad importa del modo: la escritura
+llega a IndexedDB, el outbox se queda vacío, y `upsert`/`select`/`rpc` no se llaman nunca.
+
 ### Componentes
 
 `SyncStatus.tsx` recibe el estado **por props** y no importa `./sync` ni `./supabase` justamente para
@@ -63,7 +72,11 @@ poder testearlo sin montar el motor ni el cliente. Mantén esa propiedad si aña
 - **El Postgres de verdad**: FK, RLS, triggers de LWW y de lápidas. Solo se ejercen contra un proyecto
   real. → [[postgres-schema]]
 - **`initSync`** y sus disparadores (`online`, `visibilitychange`, sondeo, web locks).
-- **`App.tsx`**: no hay test de la app completa ni del gate de sesión.
+- **`App.tsx`**: no hay test de la app completa ni del gate de sesión (tampoco de su rama de demo, del
+  arranque que siembra el decorado, ni de los modales, `SessionSheet` incluida). Lo que sí está cubierto
+  es su contenido, `SyncNote`, y que el chip llama a `onOpen`.
+- **`enterDemo` / `leaveDemo`**: recargan la página, que jsdom no implementa. Lo testeable de `demo.ts`
+  está separado justamente por eso.
 - **Los gráficos** ([[charts]]).
 
 Todo eso vive en [[qa-playbook]].

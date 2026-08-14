@@ -9,13 +9,15 @@ import { bootstrapData, getAllData, loadPreferences, savePreferences } from './d
 // Las escrituras pasan por sync.ts y no por db.ts: además de guardar en IndexedDB encolan la
 // operación para subirla. Las lecturas y las preferencias (que no se sincronizan) siguen en db.ts.
 import { clearAllDataSynced, getSyncState, initSync, removeMovementSynced, saveCategorySynced, saveMovementSynced, subscribeSyncState } from './sync';
+import { consumeDemoReset, isDemo } from './demo';
+import { leaveDemo, resetDemo } from './demoData';
 import { onAuthChange, resolveUserId, signOut } from './supabase';
 import { SyncChip, SyncNote } from './SyncStatus';
 import { needsAttention, syncCopy } from './syncCopy';
 import Login from './Login';
 import Patrimonio from './Patrimonio';
 import { Empty, Stat } from './Ui';
-import type { Account, Category, Closing, Movement, MovementType, Preferences } from './types';
+import type { Account, Category, Closing, Movement, MovementType, Preferences, SyncState } from './types';
 const TrendChart = lazy(() => import('./Charts').then(m=>({default:m.TrendChart})));
 const ExpenseChart = lazy(() => import('./Charts').then(m=>({default:m.ExpenseChart})));
 const WeeklyChart = lazy(() => import('./Charts').then(m=>({default:m.WeeklyChart})));
@@ -35,7 +37,11 @@ export default function App() {
   // El `prev===undefined` es la carrera real: si el usuario entra mientras resolveUserId sigue en
   // vuelo, SIGNED_IN ya habría fijado el id y la resolución inicial (null) lo pisaría devolviéndolo
   // al login. La suscripción manda; resolveUserId solo rellena el hueco inicial.
-  useEffect(()=>{resolveUserId().then(id=>setUserId(prev=>prev===undefined?id:prev));return onAuthChange(setUserId)},[]);
+  // En demo no hay sesión que resolver ni a la que suscribirse: ni se llega a tocar supabase.auth. El
+  // guard va DENTRO del efecto porque los hooks no pueden ser condicionales.
+  useEffect(()=>{if(isDemo())return;resolveUserId().then(id=>setUserId(prev=>prev===undefined?id:prev));return onAuthChange(setUserId)},[]);
+  // Antes de las dos ramas de sesión: la demo no espera a comprobar nada, entra directa.
+  if(isDemo())return <Finances key="demo"/>;
   if(userId===undefined)return <div className="loading">Comprobando tu sesión…</div>;
   if(userId===null)return <Login/>;
   // key: cambiar de usuario remonta el árbol entero, así ningún estado sobrevive al cambio.
@@ -43,14 +49,17 @@ export default function App() {
 }
 
 function Finances() {
-  const [page,setPage]=useState<Page>('summary'); const [movements,setMovements]=useState<Movement[]>([]); const [categories,setCategories]=useState<Category[]>([]); const [accounts,setAccounts]=useState<Account[]>([]); const [closings,setClosings]=useState<Closing[]>([]); const [prefs,setPrefs]=useState<Preferences>({periodMode:'month',selectedDate:today}); const [loading,setLoading]=useState(true); const [notice,setNotice]=useState(''); const [modal,setModal]=useState(false); const [editing,setEditing]=useState<Movement|null>(null);
+  const [page,setPage]=useState<Page>('summary'); const [movements,setMovements]=useState<Movement[]>([]); const [categories,setCategories]=useState<Category[]>([]); const [accounts,setAccounts]=useState<Account[]>([]); const [closings,setClosings]=useState<Closing[]>([]); const [prefs,setPrefs]=useState<Preferences>({periodMode:'month',selectedDate:today}); const [loading,setLoading]=useState(true); const [notice,setNotice]=useState(''); const [modal,setModal]=useState(false); const [editing,setEditing]=useState<Movement|null>(null); const [sheet,setSheet]=useState(false);
   const reload=async()=>{const data=await getAllData();setMovements(data.movements);setCategories(data.categories.sort((a,b)=>a.order-b.order));setAccounts(data.accounts.sort((a,b)=>a.order-b.order));setClosings(data.closings);};
   // El sync necesita poder recargar la pantalla cuando el pull trae algo, pero `reload` es una
   // función nueva en cada render: capturarla directamente congelaría la primera. El ref siempre
   // apunta a la vigente. `dead` cubre el doble montaje de StrictMode, que en desarrollo ejecutaría
   // initSync dos veces y dejaría los listeners del primero sueltos.
   const reloadRef=useRef(reload); useEffect(()=>{reloadRef.current=reload});
-  useEffect(()=>{let stop:(()=>void)|undefined;let dead=false;(async()=>{await bootstrapData();await reload();const saved=await loadPreferences();if(saved)setPrefs(saved);setLoading(false);if(!dead)stop=initSync(()=>reloadRef.current())})();return()=>{dead=true;stop?.()}},[]);
+  // La marca de reseteo se consume SÍNCRONA, fuera del async: el doble montaje de StrictMode entraría
+  // dos veces y sembraría el decorado por duplicado. Solo se pone al entrar en la demo, así que
+  // recargar dentro de ella no pierde lo que hayas probado.
+  useEffect(()=>{let stop:(()=>void)|undefined;let dead=false;const reseed=isDemo()&&consumeDemoReset();(async()=>{if(reseed)await resetDemo();await bootstrapData();await reload();const saved=await loadPreferences();if(saved)setPrefs(saved);setLoading(false);if(!dead)stop=initSync(()=>reloadRef.current())})();return()=>{dead=true;stop?.()}},[]);
   useEffect(()=>{if(!loading)savePreferences(prefs)},[prefs,loading]);
   const inPeriod=useMemo(()=>filterPeriod(movements,prefs.selectedDate,prefs.periodMode),[movements,prefs]); const totals=useMemo(()=>summary(inPeriod),[inPeriod]);
   // useCallback para poder usarlo como dependencia de los efectos de aviso sin rearmarlos en cada render.
@@ -66,22 +75,26 @@ function Finances() {
     if(next.lastError&&next.lastError!==last.lastError)flash(next.lastError);
     last=next;
   })},[flash]);
+  // Una sola definición de "salir" para el aside y para la hoja de la cabecera: son el mismo botón en
+  // dos sitios, y en demo salir es borrar los datos de prueba en vez de cerrar sesión.
+  const signOff=isDemo()?()=>{void leaveDemo()}:()=>{void signOut()};
   const openForm=(movement?:Movement)=>{setEditing(movement||null);setModal(true)};
   const onSaved=async(m:Movement)=>{await saveMovementSynced(m);await reload();setModal(false);flash(editing?'Movimiento actualizado':'Movimiento añadido')};
   const deleteOne=async(m:Movement)=>{if(confirm(`¿Eliminar “${m.concept}”? Esta acción no se puede deshacer.`)){await removeMovementSynced(m.id);await reload();flash('Movimiento eliminado')}};
   if(loading)return <div className="loading">Preparando tu espacio financiero…</div>;
   return <div className="app-shell">
-    <aside><div className="brand"><span><WalletCards/></span><div><b>FinHub</b><small>Finanzas personales</small></div></div><nav>{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><SyncNote state={sync} onSignOut={()=>{void signOut()}}/></aside>
+    <aside><div className="brand"><span><WalletCards/></span><div><b>FinHub</b><small>Finanzas personales</small></div></div><nav>{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><SyncNote state={sync} onSignOut={signOff}/></aside>
     {/* El chip vive en la cabecera y no solo en el aside porque el aside desaparece por debajo de
-        760px, que es justo el caso en el que saber si el móvil ha sincronizado importa más. */}
-    <main><header><div><span className="eyebrow">Tu dinero, con claridad</span><h1>{pages.find(p=>p[0]===page)![3]}</h1></div><div className="header-side"><SyncChip state={sync}/>{page!=='categories'&&page!=='patrimonio'&&<button className="primary" onClick={()=>openForm()}><Plus/>Nuevo movimiento</button>}</div></header>
+        760px, que es justo el caso en el que saber si el móvil ha sincronizado importa más. Y por eso
+        mismo abre la hoja: ahí abajo es el único camino a la nota y a la salida. */}
+    <main><header><div><span className="eyebrow">Tu dinero, con claridad</span><h1>{pages.find(p=>p[0]===page)![3]}</h1></div><div className="header-side"><SyncChip state={sync} onOpen={()=>setSheet(true)}/>{page!=='categories'&&page!=='patrimonio'&&<button className="primary" onClick={()=>openForm()}><Plus/>Nuevo movimiento</button>}</div></header>
     {page==='summary'&&<Summary prefs={prefs} setPrefs={setPrefs} totals={totals} items={inPeriod} categories={categories}/>}
     {page==='weekly'&&<Weekly prefs={prefs} setPrefs={setPrefs} movements={movements} categories={categories}/>}
     {page==='movements'&&<Movements items={movements} categories={categories} accounts={accounts} onEdit={openForm} onDelete={deleteOne}/>}
     {page==='patrimonio'&&<Patrimonio accounts={accounts} closings={closings} movements={movements} reload={reload} onNotice={flash}/>}
     {page==='categories'&&<Categories categories={categories} reload={reload} onNotice={flash}/>}
     </main><div className="mobile-nav">{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/><small>{label}</small></button>)}</div>
-    {modal&&<MovementModal initial={editing} categories={categories} accounts={accounts} onClose={()=>setModal(false)} onSave={onSaved}/>}<div className="sr-live" aria-live="polite">{notice}</div>{notice&&<div className="toast">{notice}</div>}
+    {modal&&<MovementModal initial={editing} categories={categories} accounts={accounts} onClose={()=>setModal(false)} onSave={onSaved}/>}{sheet&&<SessionSheet state={sync} onSignOut={signOff} onClose={()=>setSheet(false)}/>}<div className="sr-live" aria-live="polite">{notice}</div>{notice&&<div className="toast">{notice}</div>}
   </div>;
 }
 
@@ -147,6 +160,22 @@ function MovementModal({initial,categories,accounts,onClose,onSave}:{initial:Mov
   useEffect(()=>{dialog.current?.focus();const prev=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{document.body.style.overflow=prev}},[]);
   useEffect(()=>{const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()};document.addEventListener('keydown',onKey);return()=>document.removeEventListener('keydown',onKey)},[onClose]);
   return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><div className="modal" ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-head"><div><span className="eyebrow">Registro</span><h2 id="modal-title">{initial?'Editar movimiento':'Nuevo movimiento'}</h2></div><button aria-label="Cerrar" onClick={onClose}><X/></button></div><form onSubmit={submit}><div className="type-picker"><button type="button" className={form.type==='expense'?'active expense':''} onClick={()=>chooseType('expense')}>Gasto</button><button type="button" className={form.type==='income'?'active income':''} onClick={()=>chooseType('income')}>Ingreso</button></div><label>Concepto<input value={form.concept} onChange={e=>update({concept:e.target.value})} placeholder="Ej. Compra semanal"/></label><div className="form-grid"><label>Importe (€)<input type="number" min="0.01" step="0.01" value={form.amount||''} onChange={e=>update({amount:Number(e.target.value)})} placeholder="0,00"/></label><label>Fecha<input type="date" value={form.date} onChange={e=>update({date:e.target.value})}/></label><label>Categoría<select value={form.categoryId} onChange={e=>update({categoryId:e.target.value,subcategoryId:''})}>{active.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Subcategoría<select value={form.subcategoryId||''} onChange={e=>update({subcategoryId:e.target.value})}><option value="">Sin subcategoría</option>{cat?.subcategories.filter(s=>!s.archived||s.id===form.subcategoryId).sort((a,b)=>a.order-b.order).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label></div>{/* Solo si hay cuentas: sin patrimonio configurado, un select con una única opción sería ruido. Vincular no cambia ningún agregado —el ahorro, las categorías y las tendencias no miran la cuenta—; sirve para localizar el sin clasificar. */}{openAccounts.length>0&&<label>Cuenta <span>(opcional)</span><select value={form.accountId||''} onChange={e=>update({accountId:e.target.value})}><option value="">Sin cuenta</option>{openAccounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>}<label>Notas <span>(opcional)</span><textarea value={form.notes||''} onChange={e=>update({notes:e.target.value})} placeholder="Añade algún detalle"/></label>{error&&<p className="form-error" role="alert">{error}</p>}<div className="form-actions"><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary">{initial?'Guardar cambios':'Añadir'}</button></div></form></div></div>;
+}
+
+/** La nota del aside, alcanzable desde la cabecera. */
+// Existe por el móvil: el aside desaparece por debajo de 760px y con él la única salida de la sesión y
+// de la demo. Reutiliza `.modal`, que en móvil ya sube desde abajo como una hoja, y renderiza el
+// SyncNote tal cual en vez de repetir su copy. Sin <h2> propio: el encabezado de la nota ya hace de
+// título, así que el diálogo se nombra con `aria-label` y la cabecera solo lleva el cierre.
+function SessionSheet({state,onSignOut,onClose}:{state:SyncState;onSignOut:()=>void;onClose:()=>void}){
+  const dialog=useRef<HTMLDivElement>(null);
+  // Devuelve el foco a quien la abrió, a diferencia de los modales de formulario: aquí el disparador es
+  // el chip de la cabecera, que sigue ahí al cerrar, y con el teclado quedarse en el body significa
+  // volver a recorrer la página entera. Al cerrar sesión el árbol se desmonta y el focus() no encuentra
+  // nada, que es inocuo.
+  useEffect(()=>{const opener=document.activeElement as HTMLElement|null;dialog.current?.focus();const prev=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{document.body.style.overflow=prev;opener?.focus()}},[]);
+  useEffect(()=>{const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()};document.addEventListener('keydown',onKey);return()=>document.removeEventListener('keydown',onKey)},[onClose]);
+  return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><div className="modal session-sheet" ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label={state.status==='demo'?'Modo demo':'Sincronización y sesión'}><div className="modal-head"><span/><button aria-label="Cerrar" onClick={onClose}><X/></button></div><SyncNote state={state} onSignOut={onSignOut}/></div></div>;
 }
 
 function CategoryModal({type,onClose,onSave}:{type:MovementType;onClose:()=>void;onSave:(name:string)=>void}){

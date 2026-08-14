@@ -45,7 +45,7 @@ barato que grepear `src/` entero y el esquema SQL.
 - [[first-sync]] — vinculación de un dispositivo nuevo (el flujo más delicado del proyecto).
 - [[pull]] — bajar el estado del servidor y sus cinco disparadores.
 - [[borrado-total]] — "Borrar todo", la única operación que exige conexión.
-- [[login]] — arranque, sesión, modo offline y cambio de usuario.
+- [[login]] — arranque, sesión, modo offline, modo demo y cambio de usuario.
 - [[migraciones-idb]] — versiones de IndexedDB y la copia desde la marca anterior.
 
 ## 📚 Referencia
@@ -68,6 +68,7 @@ barato que grepear `src/` entero y el esquema SQL.
 - [[007-subcategorias-normalizadas-en-servidor]] — embebidas en cliente, filas en Postgres.
 - [[008-deploy-en-vercel]] — Vercel despliega; la Action de CI es semáforo, no puerta.
 - [[009-la-foto-manda-cierre-mensual]] — patrimonio: cierre por (cuenta, mes) con id determinista, sin lápidas.
+- [[010-modo-demo]] — probar la app sin cuenta: base de IndexedDB aparte y sync apagado.
 
 ## Cómo está organizado el grafo
 

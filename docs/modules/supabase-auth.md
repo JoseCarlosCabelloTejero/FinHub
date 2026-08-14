@@ -11,7 +11,10 @@ redescubrirla entrando al panel.
 
 **Fuente de verdad**: `src/supabase.ts` · `src/Login.tsx` · `supabase/config.toml` · dashboard de Supabase
 
-La app **exige login** y **solo permite un usuario**, el propietario. → [[006-un-solo-usuario]]
+La app **exige login** para llegar a tus datos y **solo permite un usuario**, el propietario
+→ [[006-un-solo-usuario]]. La única entrada sin cuenta es el **modo demo**, y su regla es que nada de
+aquí se ejecuta: en demo no se llama a `resolveUserId()`, ni se suscribe a `onAuthChange`, ni se toca la
+sesión → [[010-modo-demo]].
 
 ## El cliente
 
@@ -27,7 +30,9 @@ createClient(url, anonKey, {
   hash, así que inspeccionar la URL en cada arranque sería trabajo inútil.
 - Si faltan `VITE_SUPABASE_URL` o `VITE_SUPABASE_ANON_KEY`, **el módulo lanza un error al importarse**.
   Es a propósito: un cliente a medio construir da errores de red desconcertantes en la primera llamada
-  en vez de aquí. Síntoma típico: **pantalla en blanco** → te falta `.env.local`.
+  en vez de aquí. Síntoma típico: **pantalla en blanco** → te falta `.env.local`. Ese throw alcanza
+  también al modo demo, porque `sync.ts` importa este módulo estáticamente: la demo garantiza que **no se
+  escribe** en Supabase, no que la app funcione sin proyecto configurado.
 
 ## Funciones
 
@@ -73,6 +78,11 @@ que hacer. El código real de un `unknown` se registra en consola; el sospechoso
 En el camino feliz **no hay callback ni `setSending(false)`**: `signIn` guarda la sesión, dispara
 `SIGNED_IN` y el gate de [[ui-app]] cambia de pantalla desmontando el formulario.
 
+Debajo del botón de entrar hay un **"Probar la demo"** (`.secondary`) con su nota de qué implica. Va con
+`type="button"` obligatorio: sin él enviaría el formulario de login antes de entrar en la demo, y el
+usuario vería el error de campos vacíos. Cambia de pantalla recargando, no por `SIGNED_IN`.
+→ [[010-modo-demo]]
+
 ## ⚙️ Configuración manual del dashboard (no versionable)
 
 Lo que se puede versionar vive en el repo (`supabase/config.toml`, `supabase/migrations/`). Esto **hay
@@ -109,4 +119,4 @@ local se comporta igual que producción. El usuario de pruebas se crea desde Stu
 - **Sin haber entrado nunca en ese navegador**: la app **no** se puede usar sin conexión. Es inherente
   al login obligatorio y se acepta como parte de la migración.
 
-Related: [[login]] · [[postgres-schema]] · [[006-un-solo-usuario]] · [[comandos-y-entorno]]
+Related: [[login]] · [[postgres-schema]] · [[006-un-solo-usuario]] · [[comandos-y-entorno]] · [[010-modo-demo]]
