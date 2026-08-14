@@ -53,12 +53,14 @@ serie. → [[patrimonio]]
   ingreso/gasto— y `theme.text` para la línea de ahorro.
 - `NetWorthChart` va en `theme.text`: el patrimonio es **nivel, no flujo**, y el verde/rojo del dominio
   se reserva para el Δ, que sí lo es → [[design-system]]
-- `ExpenseChart` usa `categoryColor(d.categoryId)` (no un índice de posición): cada `<Cell>` recibe el
-  color de **su categoría**, así que se mantiene igual aunque cambie el ranking de gasto de un mes a
-  otro. La rampa sigue siendo los mismos 6 tonos atenuados (azul, naranja, cian, violeta, rosa,
-  mostaza — sin verde ni rojo); `'Otros'` siempre sale en `theme.muted`, nunca en un tono de la rampa.
-  El `stroke: theme.surface` separa los segmentos entre sí; el `<Legend>` y el `<Tooltip>` con el
-  nombre de cada categoría son el canal de apoyo para los tonos que no llegan a 3:1 de contraste sobre
-  blanco. → [[design-system]]
+- `ExpenseChart` resuelve la paleta **de la lista entera de una vez** con
+  `categoryPalette(data.map(d=>d.categoryId))`, y no color a color: el color sigue siendo el de la
+  identidad de cada categoría —no su puesto en el gasto del mes— pero así **dos porciones nunca salen
+  del mismo tono**, que es lo que pasaba antes porque el hash colisiona. La rampa son 5 tonos (azul,
+  naranja tostado, violeta profundo, mostaza, cian — sin verde ni rojo); `'Otros'` siempre sale en
+  `theme.muted`, nunca en un tono de la rampa. El `stroke: theme.surface` de 2px y el `paddingAngle`
+  son el hueco obligatorio entre rellenos contiguos; el `<Legend>` y el `<Tooltip>` con el nombre de
+  cada categoría, el canal de apoyo para los dos tonos que no llegan a 3:1 de contraste sobre blanco.
+  **Los cuatro son parte de la validación de la paleta: no quitar ninguno.** → [[design-system]]
 
 Related: [[design-system]] · [[calculations]] · [[ui-app]]

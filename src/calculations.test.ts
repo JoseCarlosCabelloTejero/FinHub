@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { available, closingId, closingsByMonth, filterPeriod, investmentReturns, latestClosings, monthCompleteness, monthDelta, monthsWithoutClosing, netWorth, netWorthSeries, parseAmount, previousMonth, shiftMonth, summary, topCategories, unclassified, unclassifiedByAccount, weeklyBreakdown, weekOfMonth, weeksInMonth } from './calculations';
 import { EPOCH_UPDATED_AT } from './data';
+import { CATEGORY_LIMIT } from './theme';
 import type { Account, Category, Closing, Movement } from './types';
 const movement=(type:'income'|'expense',amount:number,date='2026-04-10',categoryId='x',subcategoryId?:string):Movement=>({id:crypto.randomUUID(),type,amount,date,categoryId,subcategoryId,concept:'Test',createdAt:'',updatedAt:''});
 const inAccount=(accountId:string,m:Movement):Movement=>({...m,accountId});
@@ -11,6 +12,8 @@ describe('topCategories',()=>{
   it('deja la lista intacta justo en el límite',()=>expect(topCategories(list(6),6)).toHaveLength(6));
   it('agrupa la cola en "Otros"',()=>{const r=topCategories(list(8),6);expect(r).toHaveLength(6);expect(r[5]).toEqual({categoryId:'otros',name:'Otros',value:3+2+1})});
   it('conserva el total',()=>{const d=list(9);const total=d.reduce((n,x)=>n+x.value,0);expect(topCategories(d,6).reduce((n,x)=>n+x.value,0)).toBe(total)});
+  // Sin argumento manda la rampa: es lo que evita que ampliarla deje los dos números descuadrados.
+  it('sin límite explícito usa el tamaño de la rampa',()=>expect(topCategories(list(20))).toHaveLength(CATEGORY_LIMIT));
 });
 
 describe('semanas del mes',()=>{

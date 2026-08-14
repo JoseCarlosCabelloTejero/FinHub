@@ -34,6 +34,8 @@ Los nombres de `describe`/`it` están en **español**, como el resto de lo que l
 | `demoData.test.ts` | El decorado: ids reales, fechas válidas, y **descuadre 0** en Patrimonio |
 | `Login.test.tsx` | El formulario de login (con `signIn` mockeado) y el botón de la demo |
 | `SyncStatus.test.tsx` | Chip (adorno o disclosure según `onOpen`) y nota del aside, a partir de un `SyncState` |
+| `theme.test.ts` | `categoryColor` (estable por id) y `categoryPalette` (**nunca repite tono**, "Otros" en gris) |
+| `Ui.test.tsx` | `ConfirmDialog`: roles ARIA, las tres salidas (Cancelar / `Escape` / backdrop), foco y bloqueo de scroll |
 
 ### Los dos ficheros de migración están aparte a propósito
 

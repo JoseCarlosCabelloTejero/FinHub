@@ -52,17 +52,21 @@ Los porcentajes son sobre los **ingresos del mes** y valen `null` si no hay ingr
 
 `categoryData` suma el gasto por categoría, descarta los ceros y ordena de mayor a menor. Cada fila es
 `{ categoryId, name, value }` — el `categoryId` viaja hasta el donut para poder colorear por identidad
-de categoría en vez de por posición en el ranking (ver más abajo). `topCategories(data, limit = 6)`
-recorta la cola agrupándola en **"Otros"**, y **conserva el total**; la fila `'Otros'` no es una
-categoría real, así que lleva el `categoryId` sentinel `OTROS_ID` (`theme.ts`) en vez del de una
-categoría.
+de categoría en vez de por posición en el ranking (ver más abajo).
+`topCategories(data, limit = CATEGORY_LIMIT)` recorta la cola agrupándola en **"Otros"**, y **conserva
+el total**; la fila `'Otros'` no es una categoría real, así que lleva el `categoryId` sentinel
+`OTROS_ID` (`theme.ts`) en vez del de una categoría.
 
-El límite no es arbitrario: la rampa del donut solo distingue bien 6 tonos, y por eso [[ui-app]] pasa
-`CATEGORY_LIMIT = theme.ramp.length`. Si añades colores a la rampa, el límite se ajusta solo.
-`categoryColor(categoryId)` (`theme.ts`) deriva el color con un hash determinista del id: misma
-categoría, mismo color siempre, sin importar su puesto en el gasto del mes. Con más de 6 categorías con
-gasto en el mismo periodo, dos pueden coincidir en color — límite matemático de 6 tonos para más
-categorías, no un bug. → [[design-system]]
+El límite no es arbitrario: la rampa del donut solo distingue bien 5 tonos con garantías, y
+`CATEGORY_LIMIT = theme.ramp.length`. **Ese es también el valor por defecto del parámetro**, y no un
+`6` escrito a mano como antes: así tocar la rampa mueve el límite solo, sin que se puedan quedar los
+dos números descuadrados. [[ui-app]] llama sin argumento.
+
+El color lo pone `categoryPalette(ids)` (`theme.ts`) para la lista entera, no `categoryColor` porción
+a porción: sigue siendo el color de la identidad de cada categoría —misma categoría, mismo color, sin
+importar su puesto en el gasto del mes— pero garantizando que **dos porciones nunca comparten tono**.
+El hash colisiona por fuerza con 10 categorías sobre 5 tonos, y ese era el defecto real.
+→ [[design-system]]
 
 ## Patrimonio: cuentas y cierres
 

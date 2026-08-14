@@ -33,29 +33,19 @@ describe('indicador de sync', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('avisa antes de cerrar sesión con cambios sin subir', async () => {
-    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    const onSignOut = vi.fn();
-    render(<SyncNote state={state({ pendingOps: 2 })} onSignOut={onSignOut}/>);
-    await userEvent.setup().click(screen.getByRole('button', { name: /cerrar sesión/i }));
-    expect(confirmar).toHaveBeenCalledWith('Tienes 2 cambios sin sincronizar. ¿Cerrar sesión igualmente?');
-    expect(onSignOut).not.toHaveBeenCalled();
-  });
-
-  it('en demo la salida se llama por su nombre y avisa de que borra', async () => {
-    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  // La nota ya no decide si hay que preguntar ni con qué texto: eso vive en App.tsx, que es donde
+  // está el diálogo. Aquí solo se comprueba que el botón avisa hacia arriba y cómo se llama.
+  it('en demo la salida se llama por su nombre', async () => {
     const onSignOut = vi.fn();
     render(<SyncNote state={state({ status: 'demo' })} onSignOut={onSignOut}/>);
-    // Sin cola pendiente, el confirm de arriba no saltaría; aquí hace falta porque salir sí borra.
     await userEvent.setup().click(screen.getByRole('button', { name: /salir de la demo/i }));
-    expect(confirmar).toHaveBeenCalledWith('Al salir se borrarán los datos de la demo. ¿Continuar?');
     expect(onSignOut).toHaveBeenCalled();
   });
 
-  it('con la cola vacía cierra sesión sin preguntar', async () => {
-    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('fuera de la demo el botón cierra sesión y no pregunta por su cuenta', async () => {
+    const confirmar = vi.spyOn(window, 'confirm');
     const onSignOut = vi.fn();
-    render(<SyncNote state={state()} onSignOut={onSignOut}/>);
+    render(<SyncNote state={state({ pendingOps: 2 })} onSignOut={onSignOut}/>);
     await userEvent.setup().click(screen.getByRole('button', { name: /cerrar sesión/i }));
     expect(confirmar).not.toHaveBeenCalled();
     expect(onSignOut).toHaveBeenCalled();

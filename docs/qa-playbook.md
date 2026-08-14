@@ -97,6 +97,19 @@ vacía la cola y `key={userId}` remonta el árbol entero).
   Es un atajo, no un segundo sitio donde mirar.
 - Modal en móvil: al abrirlo el teclado **no** debe salir solo, y el fondo no debe hacer scroll.
 - `Escape` y clic en el fondo cierran el modal.
+- **Ninguna confirmación puede salir con el diálogo del navegador.** Repasar las cinco: salir de la
+  demo, cerrar sesión con cola pendiente, eliminar un movimiento y las **dos** de "Borrar todo". En
+  móvil, salir de la demo desde el chip **no** debe dejar dos capas oscuras superpuestas: la hoja de
+  sesión se cierra al abrirse el diálogo.
+- Con el diálogo abierto, pulsar Intro nada más aparecer **no** debe confirmar: el foco entra en el
+  diálogo, no en el botón de la acción.
+- **Scroll al cambiar de módulo**: bajar al fondo de Movimientos y saltar al Resumen — tiene que
+  aterrizar arriba. Igual entre las tres subvistas de Patrimonio, y con el botón del aviso de meses
+  sin cerrar, que salta a *Cierre mensual* desde el fondo de *Nivel*.
+- **Donut**: con seis o más categorías con gasto en el periodo salen 4 categorías + "Otros" en gris,
+  con **cinco colores distintos** y ninguno verde ni rojo. Cambiar de mes: una categoría conserva su
+  color aunque cambie de puesto en el ranking. Si has tocado `theme.ramp`, vuelve a medirla antes de
+  darla por buena → [[design-system]].
 - Navegación solo con teclado: un único indicador de foco visible en todos los controles.
 - Con lector de pantalla, los avisos ("Movimiento añadido", "Sin conexión") se anuncian una sola vez.
 - Un mes de febrero de 28 días debe mostrar **4** columnas de semana en la vista Semanal.

@@ -1,5 +1,5 @@
 import { Check, CloudOff, FlaskConical, LogOut, RefreshCw, TriangleAlert, UploadCloud } from 'lucide-react';
-import { changes, needsAttention, syncCopy } from './syncCopy';
+import { needsAttention, syncCopy } from './syncCopy';
 import type { SyncState } from './types';
 
 // Ni ./sync ni ./supabase: el estado entra por props. Así se testea sin montar el motor ni el cliente
@@ -41,14 +41,9 @@ export function SyncNote({ state, onSignOut }: { state: SyncState; onSignOut: ()
   // El modo demo se deduce del propio estado y no de un prop ni de ./demo: así este componente sigue
   // dependiendo solo de lo que recibe, que es lo que permite testearlo sin montar el motor.
   const demo = state.status === 'demo';
-  // Cerrar sesión no vacía el outbox: al volver a entrar con la misma cuenta se sube igual. Lo que sí
-  // lo tira es entrar con otra cuenta (adoptUser en sync.ts), y eso el usuario no puede deducirlo.
-  // En demo el aviso es el contrario: no hay nada pendiente (nunca se encola), pero salir sí borra.
-  const leave = () => {
-    if (demo) { if (confirm('Al salir se borrarán los datos de la demo. ¿Continuar?')) onSignOut(); return }
-    if (state.pendingOps && !confirm(`Tienes ${changes(state.pendingOps)} sin sincronizar. ¿Cerrar sesión igualmente?`)) return;
-    onSignOut();
-  };
+  // El botón solo avisa hacia arriba: quién pregunta y con qué texto lo decide App.tsx, que es donde
+  // vive el diálogo de confirmación. Aquí importa porque este componente se renderiza dos veces —nota
+  // del aside y hoja de sesión—, y montar el diálogo dentro dejaría dos backdrops anidados en móvil.
   return <div className="aside-note">
     <span>{demo ? 'Demo' : 'Sincronización'}</span>
     <p className={`sync-line ${needsAttention(state) ? 'warn' : ''}`}><SyncIcon state={state}/>{label}</p>
@@ -56,6 +51,6 @@ export function SyncNote({ state, onSignOut }: { state: SyncState; onSignOut: ()
     {/* Sin role="alert": la región aria-live de App.tsx ya anuncia este mismo error cuando aparece, y
         dos regiones vivas compitiendo se pisan los anuncios. Aquí solo queda como registro visible. */}
     {state.lastError && <p className="sync-error">{state.lastError}</p>}
-    <button className="sign-out" onClick={leave}><LogOut/>{demo ? 'Salir de la demo' : 'Cerrar sesión'}</button>
+    <button className="sign-out" onClick={onSignOut}><LogOut/>{demo ? 'Salir de la demo' : 'Cerrar sesión'}</button>
   </div>;
 }

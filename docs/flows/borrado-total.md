@@ -27,8 +27,8 @@ sequenceDiagram
     participant DB as IndexedDB
 
     U->>A: "Borrar todo"
-    A->>U: confirm 1 — "Se borrarán todos tus movimientos…"
-    A->>U: confirm 2 — "Esta acción es irreversible…"
+    A->>U: ConfirmDialog 1 — "Borrar todos los datos"
+    A->>U: ConfirmDialog 2 — "Esto no se puede deshacer"
     A->>S: clearAllDataSynced()
     S->>PG: rpc('wipe_all_data')
     alt error (sin red o sin sesión)

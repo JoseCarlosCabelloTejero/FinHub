@@ -613,6 +613,20 @@ td small { display: block; color: var(--muted); margin-top: 3px }
   padding: 0;
   background: transparent;
 }
+/* Mismo caso que la hoja de sesión: solo cambia el ancho, porque el contenido es una frase y dos
+   botones. Lo demás —centrado, hoja inferior en móvil, pie sticky— lo pone `.modal`. */
+.modal.confirm { width: min(440px, 100%) }
+.modal.confirm p { margin: 0; color: var(--text-2); font-size: 14px; line-height: 1.55 }
+/* El rojo del botón que confirma es el mismo de la zona de peligro, que ya era la excepción
+   conocida a "rojo = gasto": una acción irreversible sí puede vestirlo. */
+.confirm .danger {
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 17px;
+  background: var(--expense);
+  color: var(--accent-fg);
+  font-weight: 700;
+}
 .modal h2 { margin: 4px 0 22px }
 .modal form > label, .form-grid label {
   display: grid;

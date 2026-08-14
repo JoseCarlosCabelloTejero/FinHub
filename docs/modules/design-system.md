@@ -46,19 +46,33 @@ bueno.
 - Fuera de ingreso/gasto, el resto de la UI es la escala de grises. **Excepción única: la rampa del
   donut de categorías** (siguiente punto), que es la única superficie con color categórico —
   precisamente para no competir con el verde/rojo semántico en ningún otro sitio.
-- **La rampa del donut** (`theme.ramp`) tiene 6 tonos atenuados de familias de color distintas (azul,
-  naranja, cian, violeta, rosa, mostaza — ninguno verde ni rojo, para no chocar con
-  ingreso/gasto), en un orden fijo que valida separación CVD par a par (incluido el par que cierra el
-  círculo, último ↔ primero). No son grises: más allá de 6 tonos deja de ser distinguible con
-  garantías, de ahí que `CATEGORY_LIMIT = theme.ramp.length` y que `topCategories()` agrupe la cola en
-  "Otros". **Si añades colores a la rampa, el límite se ajusta solo — pero hay que re-validar el
-  nuevo orden (separación CVD, contraste) antes de fijarlo.** → [[calculations]]
+- **La rampa del donut** (`theme.ramp`) tiene **5 tonos**, una familia de color cada uno (azul
+  `#2a78d6`, naranja tostado `#9a3412`, violeta profundo `#5b21b6`, mostaza `#d1a23e`, cian
+  `#06b6d4`), ninguno verde ni rojo para no chocar con ingreso/gasto. **Son 5 y no 6 por una razón
+  medible**: un donut enseña todas sus porciones a la vez, así que el test que aplica es el de
+  **todos los pares** y no solo el de los adyacentes — y con 6 tonos no lo pasa ninguna paleta.
+  Validada, con el gris de `'Otros'` dentro porque también es una porción, a **ΔE 12,1 bajo
+  daltonismo y 16,4 en visión normal** (suelos 6 y 15). Lo que la hace funcionar es que los pares de
+  familia cercana se separan por **luminosidad** y no por tono: violeta profundo contra cian
+  brillante, naranja tostado contra mostaza.
+  `CATEGORY_LIMIT = theme.ramp.length` y `topCategories()` agrupa la cola en "Otros" — y ese es
+  además el valor **por defecto** del parámetro, para que tocar la rampa no vuelva a dejar los dos
+  números descuadrados. **Si tocas la rampa hay que volver a medirla entera** (ver la verificación en
+  [[qa-playbook]]). → [[calculations]]
 - **El color es por identidad de categoría, no por ranking de gasto.** `categoryColor(categoryId)`
-  (`theme.ts`) deriva el tono con un hash determinista del `id` de la categoría: la misma categoría
-  siempre sale con el mismo color, sea cual sea su puesto en el gasto del mes. `'Otros'` (agregado de
-  la cola, no una categoría real) usa el sentinel `OTROS_ID` y siempre lleva `theme.muted`, para no
-  competir por un tono de identidad. Con más de 6 categorías con gasto en el mismo periodo, dos pueden
-  coincidir en color — límite matemático de tener solo 6 tonos, no un bug.
+  (`theme.ts`) deriva el tono con un hash determinista del `id`: la misma categoría sale con el mismo
+  color, sea cual sea su puesto en el gasto del mes. `'Otros'` (agregado de la cola, no una categoría
+  real) usa el sentinel `OTROS_ID` y siempre lleva `theme.muted`, para no competir por un tono de
+  identidad.
+- **Pero el donut pinta con `categoryPalette(ids)`, no con `categoryColor` porción a porción.** El
+  hash colisiona por fuerza —10 categorías por defecto sobre 5 tonos— y durante un tiempo el gráfico
+  repitió colores: con la rampa de 6, el hash mandaba tres categorías al naranja, dos al violeta y dos
+  al rosa, y la probabilidad de que un donut de 6 porciones saliera con 6 colores distintos era del
+  1,5 %. `categoryPalette` convierte el tono de identidad en la **preferencia**: si ya está cogido, la
+  categoría avanza al siguiente libre. Como se dibujan `CATEGORY_LIMIT` porciones como mucho sobre
+  otros tantos tonos, siempre cabe y **nunca se repite un color**. Una categoría solo cambia de color
+  si otra le pisa el suyo. Que la paleta pase el test de *todos* los pares es justo lo que permite
+  conservar el color por identidad: si dependiera del orden de dibujo habría que renunciar a él.
 - **El nivel va en gris; el flujo, en verde y rojo.** Es el enunciado completo de la regla, extendido
   al dominio del patrimonio → [[patrimonio]]:
   - **Nivel** (el saldo: patrimonio neto, disponible, Σ activos, Σ pasivos, el saldo de cada cuenta y la
@@ -86,6 +100,11 @@ bueno.
 - **`.sr-only`** para cabeceras de columna de acciones y para el `<caption>` de la tabla semanal.
 - Modales con `role="dialog"`, `aria-modal`, `aria-labelledby` (o `aria-label`) y cierre por `Escape`.
   → [[ui-app]]
+- **Ningún diálogo del navegador para confirmar.** Las acciones destructivas pasan por
+  `ConfirmDialog` (`src/Ui.tsx`), que es el mismo `.modal` que el resto. El foco entra en el diálogo y
+  **no** en el botón que confirma: dejar la acción destructiva debajo del Intro convierte un teclazo
+  en un borrado. Los `prompt()` de Categorías siguen siendo nativos — piden un valor, no una
+  confirmación.
 - **El chip de sync es el disclosure de la hoja de sesión** cuando recibe `onOpen`: lleva
   `aria-haspopup="dialog"` y su nombre accesible es el estado ("Modo demo", "Sin conexión"), no un "Más
   opciones" que no dice nada. Sin `onOpen` se queda como `<span>`, para no meter un tabstop que no lleva
