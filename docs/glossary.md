@@ -75,9 +75,15 @@ Vocabulario del proyecto. Buena parte solo vivía en comentarios del código.
 | `offline` | Sin red | "Sin conexión" |
 | `error` | El último ciclo falló; se reintenta solo | "Sin sincronizar" |
 | `auth-required` | Sin sesión válida | "Sesión caducada" |
+| `demo` | No hay servidor: el motor está apagado | "Modo demo" |
 
-El copy exacto vive en `src/syncCopy.ts`; los tres últimos son los que `needsAttention()` marca con
-un tono más oscuro. → [[design-system]]
+El copy exacto vive en `src/syncCopy.ts`; `offline`, `error` y `auth-required` son los que
+`needsAttention()` marca con un tono más oscuro — `demo` **no**, porque no es una avería.
+→ [[design-system]]
+
+**Modo demo** — la app entera funcionando sin cuenta, en su propia base de IndexedDB (`finhub-demo`) y
+sin hablar con el servidor. Es un estado terminal: se fija en `initSync` y no vuelve a cambiar.
+→ [[010-modo-demo]]
 
 ## Infraestructura
 

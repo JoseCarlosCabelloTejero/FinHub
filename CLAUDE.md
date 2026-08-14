@@ -33,6 +33,7 @@ Atajos habituales:
 - Toco el esquema, RLS o los triggers → `docs/reference/postgres-schema.md`.
 - Toco cálculos, periodos o semanas → `docs/modules/calculations.md`, `docs/domains/periodos.md`.
 - Toco auth o el arranque → `docs/modules/supabase-auth.md`, `docs/flows/login.md`.
+- Toco el modo demo → `docs/decisions/010-modo-demo.md`, luego `docs/flows/login.md`.
 - Toco colores o accesibilidad → `docs/modules/design-system.md`.
 - Toco el deploy, el CI o las variables de entorno → `docs/reference/deploy-vercel.md`.
 
@@ -47,7 +48,10 @@ migrada a Supabase, con las seis fases hechas: se despliega en **Vercel** al mer
 GitHub Action de CI es un semáforo, no una puerta (ver `docs/reference/deploy-vercel.md`).
 
 Modelo actual: **se escribe siempre primero en local**, así que la app funciona sin conexión;
-**Supabase es la fuente de verdad y además la puerta de acceso** — sin iniciar sesión no se puede usar.
+**Supabase es la fuente de verdad y además la puerta de acceso** — sin iniciar sesión no se puede usar,
+salvo el **modo demo** (`src/demo.ts`), que corre en una base de IndexedDB aparte (`finhub-demo`) con el
+sync apagado y **nunca** escribe en Supabase. Antes de tocar `demo.ts`, `demoData.ts` o cualquiera de sus
+guards, lee `docs/decisions/010-modo-demo.md`.
 IndexedDB (`finhub-finanzas`, v3) es la caché local y la cola offline. Sin telemetría ni terceros más allá
 de Supabase.
 

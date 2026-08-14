@@ -5,10 +5,11 @@ up: "[[00-index]]"
 
 # Flujo: arranque, sesión y cambio de usuario
 
-Sin sesión **no se puede usar la app**. Este flujo cubre el arranque, el caso offline y el cambio de
-cuenta en el mismo navegador.
+Sin sesión no se pueden usar **tus** datos: la única entrada sin cuenta es el modo demo, que corre
+aislado y no habla con el servidor. Este flujo cubre el arranque, el caso offline, el cambio de cuenta en
+el mismo navegador y la tercera rama del gate.
 
-**Fuente de verdad**: `App` en `src/App.tsx` · `src/supabase.ts` · `adoptUser` en `src/sync.ts`
+**Fuente de verdad**: `App` en `src/App.tsx` · `src/supabase.ts` · `src/demo.ts` · `adoptUser` en `src/sync.ts`
 
 ## Arranque
 
@@ -21,6 +22,7 @@ sequenceDiagram
     participant DB as IndexedDB
     participant Fin as Finances
 
+    App->>App: isDemo()? → <Finances key="demo"/>, sin tocar auth
     App->>App: userId = undefined → "Comprobando tu sesión…"
     App->>SB: resolveUserId()
     SB->>Auth: getSession()
@@ -49,6 +51,43 @@ sequenceDiagram
     Fin->>DB: bootstrapData() + reload() + loadPreferences()
     Fin->>Fin: initSync(reload)
 ```
+
+## El tercer camino: modo demo
+
+El gate tiene **tres** ramas, y la de la demo va primero: `if (isDemo()) return <Finances key="demo"/>`.
+En ese modo no se llama a `resolveUserId()` ni se suscribe a `onAuthChange` (el guard vive **dentro** del
+efecto, porque los hooks no pueden ser condicionales), así que `supabase.auth` no se toca en ningún momento.
+
+```mermaid
+sequenceDiagram
+    actor V as Visitante
+    participant L as Login
+    participant D as demo.ts
+    participant App as App (gate)
+    participant Fin as Finances
+    participant DB as IndexedDB (finhub-demo)
+
+    alt entra por el botón
+        V->>L: "Probar la demo"
+        L->>D: enterDemo() → marca + reseteo
+        D->>D: location.reload()
+    else entra por enlace
+        V->>D: ?demo=1 (efecto de módulo)
+        D->>D: marca + reseteo, y limpia la URL
+    end
+    Note over D,DB: db.ts elige el nombre de la base en el import
+    App->>Fin: isDemo() → <Finances key="demo"/>
+    Fin->>Fin: consumeDemoReset() (síncrono, por StrictMode)
+    Fin->>DB: resetDemo() → clearAllData() + decorado
+    Fin->>Fin: initSync → status 'demo', motor apagado
+```
+
+Dos claves de `localStorage` y no una: la **marca** (`finhub-demo`) dura mientras estés en la demo; el
+**reseteo** (`finhub-demo-reset`) se consume en el primer arranque. Por eso cada entrada empieza limpia y
+una recarga dentro de la demo no pierde lo que hayas probado. Salir borra la base demo y quita la marca.
+
+Los cuatro guards que impiden que la demo hable con el servidor están en [[sync]]; el porqué del diseño,
+en [[010-modo-demo]].
 
 ## Las cuatro sutilezas
 
@@ -113,5 +152,11 @@ Nótese el matiz de `adoptUser`: si `dataUserId` era `null` (primer arranque) **
 - **No vacía el outbox**: al volver a entrar con la misma cuenta se sube igual. Lo que sí lo tira es
   entrar con **otra** cuenta, y eso el usuario no puede deducirlo — de ahí el `confirm` que avisa de los
   cambios sin sincronizar antes de salir.
+- El botón vive en el aside **y** en la hoja que abre el chip de la cabecera (`SessionSheet`), que es la
+  única vía por debajo de 760 px porque ahí el aside no existe. Es el mismo `SyncNote` renderizado en dos
+  sitios, no dos botones. → [[ui-app]]
 
-Related: [[supabase-auth]] · [[ui-app]] · [[first-sync]] · [[006-un-solo-usuario]]
+En demo, ese botón pasa a ser **"Salir de la demo"** y su `confirm` avisa de lo contrario: no hay nada
+pendiente de subir (nunca se encola), pero salir **sí borra** los datos de prueba.
+
+Related: [[supabase-auth]] · [[ui-app]] · [[first-sync]] · [[006-un-solo-usuario]] · [[010-modo-demo]]

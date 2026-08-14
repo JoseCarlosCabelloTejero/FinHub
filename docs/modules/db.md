@@ -16,6 +16,11 @@ base ni conoce sus stores: [[sync]] y [[ui-app]] solo llaman a las funciones de 
   instancias competirían por la misma versión y por el bloqueo de `versionchange`.
 - Base `finhub-finanzas`, **versión 4**. Las migraciones y la copia desde la marca anterior están en
   [[migraciones-idb]].
+- **El nombre es condicional**: en modo demo es `finhub-demo` (`isDemo() ? DEMO_DB_NAME : …`). Se decide
+  en el import, que es la razón por la que entrar y salir de la demo recarga la página. → [[010-modo-demo]]
+- En la base demo **no se dispara la copia desde la marca anterior**: nace vacía, así que `isFreshDb`
+  sería `true` y se llevaría dentro los movimientos, el outbox y el `meta` reales. De ahí el
+  `if (isFreshDb && !isDemo())`.
 - `bootstrapData()` siembra las categorías por defecto **solo si el store está vacío**. Las cuentas y
   cierres de [[patrimonio]] **no tienen semillas**.
 - `clearAllData()` vacía todo y vuelve a sembrar (solo categorías). Vacía también `outbox` y `meta`:
@@ -74,4 +79,9 @@ Sigue el estilo denso del fichero (una línea por función) y pregúntate si la 
 directamente o si necesita su versión `*Synced` en [[sync]]. Regla práctica: **si el dato viaja al
 servidor, la UI no puede llamar a `db.ts`**.
 
-Related: [[sync]] · [[indexeddb-stores]] · [[migraciones-idb]] · [[ui-app]]
+La única excepción viva a esa regla es `resetDemo()` en `src/demoData.ts`, que siembra el decorado de la
+demo llamando a `saveMovement`/`saveAccount`/`saveClosing` directamente: sembrar es cebar la caché, como
+`bootstrapData()`, no una escritura de la persona, y pasar por las `*Synced` sellaría 80 filas con la
+hora actual.
+
+Related: [[sync]] · [[indexeddb-stores]] · [[migraciones-idb]] · [[ui-app]] · [[010-modo-demo]]

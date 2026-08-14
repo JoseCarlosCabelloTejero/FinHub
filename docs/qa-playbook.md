@@ -89,6 +89,12 @@ vacía la cola y `key={userId}` remonta el árbol entero).
 
 - Ancho ≤ 760 px: el aside desaparece y queda el nav inferior; el **chip de sync sigue visible** en la
   cabecera (es su razón de existir).
+- **Pulsar el chip** abre la hoja de sesión, que sube desde abajo: dentro deben estar el detalle del
+  estado y el botón de salir (`Cerrar sesión` o `Salir de la demo`). Es la **única** vía en móvil, así que
+  si no se abre, ahí abajo no hay forma de salir. El botón de salir no debe quedar tapado por el
+  indicador de inicio del móvil (área segura).
+- En escritorio la hoja sigue abriéndose desde el chip, con la misma información que ya muestra el aside.
+  Es un atajo, no un segundo sitio donde mirar.
 - Modal en móvil: al abrirlo el teclado **no** debe salir solo, y el fondo no debe hacer scroll.
 - `Escape` y clic en el fondo cierran el modal.
 - Navegación solo con teclado: un único indicador de foco visible en todos los controles.
@@ -216,5 +222,32 @@ Para el ejemplo del diseño (el que sostiene los tests), los números son: corri
 5. **"Borrar todo" barre también cuentas y cierres**, y **sin resembrar** (este dominio no tiene datos por
    defecto, a diferencia de las categorías). En el otro dispositivo, al sincronizar, el patrimonio debe
    quedarse vacío y no repoblarse → [[borrado-total]]
+
+### 11. Modo demo: el aislamiento → [[010-modo-demo]]
+
+Lo que se valida aquí es una **garantía negativa** —que nada sale hacia Supabase y que nada se mezcla con
+tus datos— y las garantías negativas no se comprueban con un test unitario del cliente mockeado. El orden
+importa: es el que caza el fallo grave.
+
+1. **Deja datos reales primero.** Inicia sesión de verdad, crea un movimiento reconocible y comprueba en
+   Studio que subió. Sin este paso, los tres últimos puntos no prueban nada.
+2. **Cierra sesión → "Probar la demo".** Debe entrar con datos de ejemplo, el chip de la cabecera debe
+   decir **Modo demo**, y las cinco pantallas deben tener contenido (si Resumen abre con ceros, el decorado
+   ha caído fuera del periodo).
+3. **Ni una petición.** Network filtrando por el host de Supabase: crea, edita y borra un movimiento,
+   guarda un cierre, renombra una categoría y pulsa **"Borrar todo"**. La lista tiene que quedarse vacía —y
+   "Borrar todo" en demo **no** debe pedir conexión ni resembrar el decorado.
+4. **Dos bases en IndexedDB**: `finhub-finanzas` intacta y `finhub-demo` con lo de la demo. El `outbox` de
+   la demo tiene que estar **siempre vacío** → invariante 9 de [[sync-model]]
+5. **Recargar dentro de la demo conserva lo que hayas probado**; volver a entrar desde el login empieza de
+   cero. Si una recarga te borra los datos, el parámetro `?demo=1` se ha quedado pegado en la URL.
+6. **Salir de la demo** vuelve al login (con su `confirm`) y deja `finhub-demo` vacía. Pruébalo también
+   **en móvil**, donde la salida está dentro de la hoja que abre el chip → caso 8.
+7. **El paso que de verdad importa**: vuelve a iniciar sesión. Tu movimiento del punto 1 debe seguir ahí,
+   **nada de la demo debe aparecer**, y en Studio no puede haber ni una fila nueva. Si aparecieran los
+   movimientos del decorado, el aislamiento se ha roto por donde lo haría: `firstSync` subiéndolos como
+   tuyos → [[first-sync]]
+8. **`?demo=1` en una ventana limpia** entra directo sin pasar por el login, y el parámetro desaparece de
+   la URL.
 
 Related: [[testing]] · [[comandos-y-entorno]] · [[deploy-vercel]] · [[patrimonio]] · [[00-index]]

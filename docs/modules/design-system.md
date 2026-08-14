@@ -84,7 +84,12 @@ bueno.
   lleva `role="alert"`: dos regiones vivas compitiendo se pisan los anuncios.
 - **`aria-label` en los botones-icono** (editar, eliminar, subir, bajar, cerrar, periodo anterior…).
 - **`.sr-only`** para cabeceras de columna de acciones y para el `<caption>` de la tabla semanal.
-- Modales con `role="dialog"`, `aria-modal`, `aria-labelledby` y cierre por `Escape`. → [[ui-app]]
+- Modales con `role="dialog"`, `aria-modal`, `aria-labelledby` (o `aria-label`) y cierre por `Escape`.
+  → [[ui-app]]
+- **El chip de sync es el disclosure de la hoja de sesión** cuando recibe `onOpen`: lleva
+  `aria-haspopup="dialog"` y su nombre accesible es el estado ("Modo demo", "Sin conexión"), no un "Más
+  opciones" que no dice nada. Sin `onOpen` se queda como `<span>`, para no meter un tabstop que no lleva
+  a ningún sitio.
 - Los iconos decorativos dentro de un elemento que ya tiene texto van con `aria-hidden="true"`
   (ver `SyncIcon`).
 
@@ -94,7 +99,12 @@ bueno.
 - `body { min-height: 100dvh }` — `dvh` sigue la barra de direcciones de iOS; `vh` no y corta contenido.
 - `min-width: 320px` — el ancho mínimo real que se soporta.
 - Breakpoint de **760 px**: por debajo desaparece el aside y aparece el nav inferior. Es la razón de que
-  el chip de sync viva también en la cabecera.
+  el chip de sync viva también en la cabecera **y** de que sea pulsable: con el aside fuera, la hoja que
+  abre es el único sitio donde queda el detalle del estado y el botón de salir. → [[ui-app]]
+- Los modales, por debajo de ese mismo breakpoint, **suben desde abajo** como una hoja
+  (`.modal-backdrop { place-items: end stretch }`). Cualquier diálogo nuevo hereda ese comportamiento
+  gratis reusando `.modal`; lo que **no** hereda es el hueco del área segura, que en los de formulario lo
+  pone el pie sticky de `.form-actions` (ver `.session-sheet`).
 
 ## Copy de estados (`syncCopy.ts`)
 
@@ -103,4 +113,8 @@ aviso por `aria-live`, y así se testea sin renderizar nada. El orden de los `if
 menos**: no tener red ni sesión manda sobre "hay cola", porque cambia lo que el usuario puede hacer.
 La tabla de estados está en [[glossary]].
 
-Related: [[ui-app]] · [[charts]] · [[glossary]]
+`'demo'` va **el primero de todos** y es el único que no describe una relación con el servidor sino su
+ausencia. No entra en `needsAttention`: el tono de aviso está reservado a lo que la persona tiene que
+arreglar, y estar en la demo no es una avería. → [[010-modo-demo]]
+
+Related: [[ui-app]] · [[charts]] · [[glossary]] · [[010-modo-demo]]
