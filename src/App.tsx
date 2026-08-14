@@ -4,7 +4,6 @@ import { addMonths, addYears, format, parseISO, subMonths, subYears } from 'date
 import { es } from 'date-fns/locale';
 import { categoryData, filterPeriod, money, percent, summary, topCategories, trendData, weeklyBreakdown } from './calculations';
 import type { WeeklyRow } from './calculations';
-import { CATEGORY_LIMIT } from './theme';
 import { bootstrapData, getAllData, loadPreferences, savePreferences } from './db';
 // Las escrituras pasan por sync.ts y no por db.ts: además de guardar en IndexedDB encolan la
 // operación para subirla. Las lecturas y las preferencias (que no se sincronizan) siguen en db.ts.
@@ -108,7 +107,7 @@ function PeriodBar({prefs,setPrefs,modes=true}:{prefs:Preferences;setPrefs:(p:Pr
 }
 
 function Summary({prefs,setPrefs,totals,items,categories}:{prefs:Preferences;setPrefs:(p:Preferences)=>void;totals:ReturnType<typeof summary>;items:Movement[];categories:Category[]}){
-  const trend=trendData(items,prefs.selectedDate,prefs.periodMode); const cat=topCategories(categoryData(items,categories),CATEGORY_LIMIT);
+  const trend=trendData(items,prefs.selectedDate,prefs.periodMode); const cat=topCategories(categoryData(items,categories));
   return <><PeriodBar prefs={prefs} setPrefs={setPrefs}/>
   <section className="stats"><Stat label="Ingresos" value={totals.income} icon={<ArrowUpRight/>} tone="green"/><Stat label="Gastos" value={totals.expenses} icon={<ArrowDownLeft/>} tone="red"/><Stat label="Ahorro" value={totals.savings} icon={<WalletCards/>} tone={totals.savings>=0?'neutral':'red'}/><Stat label="Tasa de ahorro" text={`${totals.rate.toFixed(1)} %`} icon={<BarChart3/>} tone="neutral"/></section>
   {items.length===0?<Empty icon={<BarChart3/>} title="Todavía no hay datos en este periodo" text="Añade tu primer ingreso o gasto para empezar a ver la evolución de tus finanzas."/>:<Suspense fallback={<div className="chart-loading">Dibujando gráficos…</div>}><section className="charts"><article className="chart wide"><h2>Evolución del periodo</h2><p>Ingresos, gastos y ahorro</p><TrendChart data={trend}/></article><article className="chart"><h2>Gastos por categoría</h2><p>Dónde se va tu dinero</p><ExpenseChart data={cat}/></article><article className="chart"><h2>Comparación temporal</h2><p>{prefs.periodMode==='month'?'Vista semanal':'Vista mensual'}</p><WeeklyChart data={trend}/></article></section></Suspense>}</>;

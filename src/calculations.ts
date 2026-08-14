@@ -1,7 +1,7 @@
 import { addMonths, endOfMonth, endOfYear, format, getDaysInMonth, isWithinInterval, parseISO, startOfMonth, startOfYear } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Account, Category, Closing, Movement } from './types';
-import { OTROS_ID } from './theme';
+import { CATEGORY_LIMIT, OTROS_ID } from './theme';
 
 export const money = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
 export const percent = new Intl.NumberFormat('es-ES', { style: 'percent', minimumFractionDigits: 2 });
@@ -48,9 +48,11 @@ export function weeklyBreakdown(items: Movement[], categories: Category[], date:
 }
 export function categoryData(items: Movement[], categories: Category[]) { return categories.filter(c=>c.type==='expense').map(c=>({categoryId:c.id,name:c.name,value:items.filter(m=>m.type==='expense'&&m.categoryId===c.id).reduce((n,m)=>n+m.amount,0)})).filter(x=>x.value>0).sort((a,b)=>b.value-a.value); }
 /** Recorta la lista (ya ordenada de mayor a menor) a `limit` entradas agrupando la cola en "Otros".
- *  La rampa del donut solo distingue bien 6 tonos; más allá el color deja de informar. `Otros` no es
- *  una categoría real, así que lleva el `categoryId` sentinel `OTROS_ID` en vez del de una categoría. */
-export function topCategories(data: {categoryId: string; name: string; value: number}[], limit = 6) {
+ *  La rampa del donut solo distingue bien `CATEGORY_LIMIT` tonos; más allá el color deja de informar.
+ *  Ese es también el valor por defecto, para que ampliar o recortar la rampa mueva el límite solo:
+ *  cuando estaba escrito a mano aquí, tocar la rampa dejaba los dos números desincronizados.
+ *  `Otros` no es una categoría real, así que lleva el `categoryId` sentinel `OTROS_ID`. */
+export function topCategories(data: {categoryId: string; name: string; value: number}[], limit = CATEGORY_LIMIT) {
   if (data.length <= limit) return data;
   const head = data.slice(0, limit - 1);
   const rest = data.slice(limit - 1).reduce((n, x) => n + x.value, 0);

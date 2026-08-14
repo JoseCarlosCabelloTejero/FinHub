@@ -1,6 +1,6 @@
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { money } from './calculations';
-import { categoryColor, theme } from './theme';
+import { categoryPalette, theme } from './theme';
 
 // Etiquetas del eje Y compactas ("1,8 mil €"): con 60px por defecto recharts se comía
 // casi el 20% del ancho en un móvil de 320px. De ahí el width fijo más estrecho.
@@ -18,10 +18,15 @@ export function TrendChart({data}:{data:{name:string;ingresos:number;gastos:numb
   return <Box><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><CartesianGrid stroke={theme.line} vertical={false}/><XAxis {...xAxis}/><YAxis {...yAxis}/><Tooltip {...tooltip}/><Legend {...legend}/><Line dataKey="ingresos" stroke={theme.income} strokeWidth={3} dot={false} activeDot={{r:4}}/><Line dataKey="gastos" stroke={theme.expense} strokeWidth={3} dot={false} activeDot={{r:4}}/><Line dataKey="ahorro" stroke={theme.text} strokeWidth={3} dot={false} activeDot={{r:4}}/></LineChart></ResponsiveContainer></Box>;
 }
 export function ExpenseChart({data}:{data:{categoryId:string;name:string;value:number}[]}) {
-  // Radios en % y leyenda sin `height` fija: en px el donut no encogía y los 6 nombres de
+  // Radios en % y leyenda sin `height` fija: en px el donut no encogía y los nombres de
   // categoría (CATEGORY_LIMIT) se salían de la caja de 36px al envolver en pantallas estrechas.
-  // Color por categoryId (identidad), no por índice: mismo color siempre para la misma categoría.
-  return <Box><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="80%" paddingAngle={3}>{data.map((d)=><Cell key={d.categoryId} fill={categoryColor(d.categoryId)} stroke={theme.surface} strokeWidth={2}/>)}</Pie><Tooltip {...tooltip}/><Legend verticalAlign="bottom" {...legend}/></PieChart></ResponsiveContainer></Box>;
+  // La paleta se resuelve para la lista entera y no color a color: el color sigue siendo el de
+  // la identidad de cada categoría, pero así dos porciones nunca salen del mismo tono.
+  // El stroke de 2px del color de la card y el paddingAngle son el hueco obligatorio entre
+  // rellenos contiguos; la leyenda y el tooltip, el canal de apoyo para los dos tonos que no
+  // llegan a 3:1 de contraste sobre blanco. No quitar ninguno de los cuatro.
+  const colors = categoryPalette(data.map(d=>d.categoryId));
+  return <Box><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="80%" paddingAngle={3}>{data.map((d,i)=><Cell key={d.categoryId} fill={colors[i]} stroke={theme.surface} strokeWidth={2}/>)}</Pie><Tooltip {...tooltip}/><Legend verticalAlign="bottom" {...legend}/></PieChart></ResponsiveContainer></Box>;
 }
 export function NetWorthChart({data}:{data:{name:string;value:number|null}[]}) {
   // En `theme.text` y no en verde/rojo: esto es nivel, no flujo. Y **sin `connectNulls`**: un mes sin
