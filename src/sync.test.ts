@@ -449,3 +449,52 @@ describe('motor de sync', () => {
     });
   });
 });
+
+// Bloque aparte del "motor de sync" y el último del fichero: la marca de la demo vive en localStorage,
+// que no se resetea entre tests, así que se limpia en el afterEach para no contaminar a nadie.
+describe('modo demo', () => {
+  let sync: typeof import('./sync');
+  let db: typeof import('./db');
+
+  beforeEach(async () => {
+    // La marca va ANTES de los imports: db.ts elige el nombre de la base en el import.
+    localStorage.setItem('finhub-demo', '1');
+    vi.resetModules(); vi.clearAllMocks(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    mocks.resolveUserId.mockResolvedValue('u1');
+    mocks.rpc.mockResolvedValue({ data: 0, error: null });
+    db = await import('./db');
+    await db.clearAllData();
+    sync = await import('./sync');
+  });
+  afterEach(() => { vi.useRealTimers(); localStorage.clear() });
+
+  it('escribe en su propia base, no en la del usuario', async () => expect((await db.dbPromise).name).toBe('finhub-demo'));
+
+  it('la escritura se guarda en local pero no se encola ni se sube', async () => {
+    await sync.saveMovementSynced(mov('m1'));
+    expect((await db.getAllData()).movements.map((m) => m.id)).toEqual(['m1']);
+    expect(await db.readOutbox()).toHaveLength(0);
+    await vi.runAllTimersAsync(); // por si quedara programado un sync con debounce
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it('initSync no arranca el motor y deja el estado en demo', () => {
+    const stop = sync.initSync(async () => {});
+    expect(sync.getSyncState()).toMatchObject({ status: 'demo', pendingOps: 0 });
+    expect(mocks.select).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it('ni un syncNow forzado llega al servidor', async () => {
+    await sync.syncNow();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.select).not.toHaveBeenCalled();
+  });
+
+  it('"borrar todo" vacía lo local sin pedir conexión', async () => {
+    await sync.saveMovementSynced(mov('m1'));
+    await sync.clearAllDataSynced();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect((await db.getAllData()).movements).toHaveLength(0);
+  });
+});

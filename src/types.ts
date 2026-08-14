@@ -106,7 +106,9 @@ export interface SyncMeta {
   lastStampAt: string | null;
 }
 
-export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error' | 'auth-required';
+// 'demo' es un estado terminal: en modo demo el motor no arranca, así que se fija una vez y no cambia
+// nunca. Es el único que no describe una relación con el servidor, sino la ausencia de servidor.
+export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error' | 'auth-required' | 'demo';
 
 // Lo que la UI necesita saber del sync. `lastError` guarda el motivo de la última op descartada por
 // ser irrecuperable, que es el único fallo que el usuario no puede deducir de `status` (el resto se
