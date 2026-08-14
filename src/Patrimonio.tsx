@@ -21,6 +21,10 @@ export default function Patrimonio({accounts,closings,movements,reload,onNotice}
   // abrir el cierre en un mes concreto. De paso, ir y volver de subvista ya no lo reinicia.
   const [month,setMonth]=useState(currentMonth());
   const goToClosing=(target:string)=>{setMonth(target);setView('closing')};
+  // Mismo motivo que el cambio de página en App: las tres subvistas son un segundo nivel de
+  // navegación y heredaban el scroll. Importa sobre todo aquí, porque el aviso de meses sin cerrar
+  // salta a Cierre mensual desde el fondo de Nivel.
+  useEffect(()=>{window.scrollTo(0,0)},[view]);
   const active=useMemo(()=>accounts.filter(a=>!a.archived).sort(byOrder),[accounts]);
   // Sin cuentas no hay nada que enseñar ni que cerrar, y aquí no hay semillas (a diferencia de las
   // categorías): la primera vez la pantalla está vacía de verdad, así que se manda a crear una cuenta.

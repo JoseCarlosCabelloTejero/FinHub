@@ -60,6 +60,13 @@ function Finances() {
   // recargar dentro de ella no pierde lo que hayas probado.
   useEffect(()=>{let stop:(()=>void)|undefined;let dead=false;const reseed=isDemo()&&consumeDemoReset();(async()=>{if(reseed)await resetDemo();await bootstrapData();await reload();const saved=await loadPreferences();if(saved)setPrefs(saved);setLoading(false);if(!dead)stop=initSync(()=>reloadRef.current())})();return()=>{dead=true;stop?.()}},[]);
   useEffect(()=>{if(!loading)savePreferences(prefs)},[prefs,loading]);
+  // Cambiar de página desmonta y monta, pero no toca el scroll del documento: salir de Movimientos
+  // por el fondo dejaba el Resumen a media página. El scroller es el documento (el aside es fixed y
+  // main no tiene overflow propio), así que basta con window. Salto instantáneo y no `smooth`: en una
+  // navegación se espera el corte, y la regla de prefers-reduced-motion del CSS no alcanza a un
+  // scrollTo desde JS. En efecto y no en el onClick de los navs, para cubrir también los cambios
+  // programáticos y no duplicar la línea en el nav lateral y en el de móvil.
+  useEffect(()=>{window.scrollTo(0,0)},[page]);
   const inPeriod=useMemo(()=>filterPeriod(movements,prefs.selectedDate,prefs.periodMode),[movements,prefs]); const totals=useMemo(()=>summary(inPeriod),[inPeriod]);
   // useCallback para poder usarlo como dependencia de los efectos de aviso sin rearmarlos en cada render.
   const flash=useCallback((text:string)=>{setNotice(text);window.setTimeout(()=>setNotice(''),2500)},[]);
