@@ -20,7 +20,9 @@ export const theme = {
   ramp: ['#2a78d6', '#9a3412', '#5b21b6', '#d1a23e', '#06b6d4'],
 } as const;
 
-export const CATEGORY_LIMIT = theme.ramp.length;
+// `: number` explícito: `theme` es `as const`, así que sin la anotación esto sería el literal `5` y
+// cualquier llamada con otro límite (los tests pasan el suyo) dejaría de compilar.
+export const CATEGORY_LIMIT: number = theme.ramp.length;
 
 // Sentinel para la fila "Otros" que agrega la cola en topCategories(): no es una
 // categoría real, así que no compite por un tono de identidad (ver categoryColor).

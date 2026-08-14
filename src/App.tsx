@@ -12,10 +12,11 @@ import { consumeDemoReset, isDemo } from './demo';
 import { leaveDemo, resetDemo } from './demoData';
 import { onAuthChange, resolveUserId, signOut } from './supabase';
 import { SyncChip, SyncNote } from './SyncStatus';
-import { needsAttention, syncCopy } from './syncCopy';
+import { changes, needsAttention, syncCopy } from './syncCopy';
 import Login from './Login';
 import Patrimonio from './Patrimonio';
-import { Empty, Stat } from './Ui';
+import { ConfirmDialog, Empty, Stat } from './Ui';
+import type { Confirm } from './Ui';
 import type { Account, Category, Closing, Movement, MovementType, Preferences, SyncState } from './types';
 const TrendChart = lazy(() => import('./Charts').then(m=>({default:m.TrendChart})));
 const ExpenseChart = lazy(() => import('./Charts').then(m=>({default:m.ExpenseChart})));
@@ -48,7 +49,7 @@ export default function App() {
 }
 
 function Finances() {
-  const [page,setPage]=useState<Page>('summary'); const [movements,setMovements]=useState<Movement[]>([]); const [categories,setCategories]=useState<Category[]>([]); const [accounts,setAccounts]=useState<Account[]>([]); const [closings,setClosings]=useState<Closing[]>([]); const [prefs,setPrefs]=useState<Preferences>({periodMode:'month',selectedDate:today}); const [loading,setLoading]=useState(true); const [notice,setNotice]=useState(''); const [modal,setModal]=useState(false); const [editing,setEditing]=useState<Movement|null>(null); const [sheet,setSheet]=useState(false);
+  const [page,setPage]=useState<Page>('summary'); const [movements,setMovements]=useState<Movement[]>([]); const [categories,setCategories]=useState<Category[]>([]); const [accounts,setAccounts]=useState<Account[]>([]); const [closings,setClosings]=useState<Closing[]>([]); const [prefs,setPrefs]=useState<Preferences>({periodMode:'month',selectedDate:today}); const [loading,setLoading]=useState(true); const [notice,setNotice]=useState(''); const [modal,setModal]=useState(false); const [editing,setEditing]=useState<Movement|null>(null); const [sheet,setSheet]=useState(false); const [ask,setAsk]=useState<Confirm|null>(null);
   const reload=async()=>{const data=await getAllData();setMovements(data.movements);setCategories(data.categories.sort((a,b)=>a.order-b.order));setAccounts(data.accounts.sort((a,b)=>a.order-b.order));setClosings(data.closings);};
   // El sync necesita poder recargar la pantalla cuando el pull trae algo, pero `reload` es una
   // función nueva en cada render: capturarla directamente congelaría la primera. El ref siempre
@@ -83,10 +84,21 @@ function Finances() {
   })},[flash]);
   // Una sola definición de "salir" para el aside y para la hoja de la cabecera: son el mismo botón en
   // dos sitios, y en demo salir es borrar los datos de prueba en vez de cerrar sesión.
-  const signOff=isDemo()?()=>{void leaveDemo()}:()=>{void signOut()};
+  // El diálogo se monta una sola vez aquí arriba, y las pantallas piden confirmación con `ask`. En la
+  // hoja de sesión hay que cerrarla antes: dos .modal-backdrop del mismo z-index se apilarían.
+  const signOff=()=>{
+    setSheet(false);
+    // Cerrar sesión no vacía el outbox: al volver a entrar con la misma cuenta se sube igual. Lo que
+    // sí lo tira es entrar con otra cuenta (adoptUser en sync.ts), y eso no se puede deducir. En demo
+    // el aviso es el contrario: no hay nada pendiente —nunca se encola— pero salir sí borra.
+    if(isDemo()){setAsk({title:'Salir de la demo',body:'Al salir se borrarán los datos de la demo. Podrás volver a entrar cuando quieras, pero con el decorado de partida.',confirmLabel:'Salir y borrar',tone:'danger',onConfirm:()=>{void leaveDemo()}});return}
+    // Sin cola no hay nada que perder ni nada que explicar: se cierra sesión sin preguntar.
+    if(!sync.pendingOps){void signOut();return}
+    setAsk({title:'Tienes cambios sin sincronizar',body:`Hay ${changes(sync.pendingOps)} en la cola. No se pierden: se subirán cuando vuelvas a entrar con esta misma cuenta.`,confirmLabel:'Cerrar sesión igualmente',onConfirm:()=>{void signOut()}});
+  };
   const openForm=(movement?:Movement)=>{setEditing(movement||null);setModal(true)};
   const onSaved=async(m:Movement)=>{await saveMovementSynced(m);await reload();setModal(false);flash(editing?'Movimiento actualizado':'Movimiento añadido')};
-  const deleteOne=async(m:Movement)=>{if(confirm(`¿Eliminar “${m.concept}”? Esta acción no se puede deshacer.`)){await removeMovementSynced(m.id);await reload();flash('Movimiento eliminado')}};
+  const deleteOne=(m:Movement)=>setAsk({title:'Eliminar movimiento',body:`Se eliminará “${m.concept}”. Esta acción no se puede deshacer.`,confirmLabel:'Eliminar',tone:'danger',onConfirm:async()=>{setAsk(null);await removeMovementSynced(m.id);await reload();flash('Movimiento eliminado')}});
   if(loading)return <div className="loading">Preparando tu espacio financiero…</div>;
   return <div className="app-shell">
     <aside><div className="brand"><span><WalletCards/></span><div><b>FinHub</b><small>Finanzas personales</small></div></div><nav>{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><SyncNote state={sync} onSignOut={signOff}/></aside>
@@ -98,9 +110,9 @@ function Finances() {
     {page==='weekly'&&<Weekly prefs={prefs} setPrefs={setPrefs} movements={movements} categories={categories}/>}
     {page==='movements'&&<Movements items={movements} categories={categories} accounts={accounts} onEdit={openForm} onDelete={deleteOne}/>}
     {page==='patrimonio'&&<Patrimonio accounts={accounts} closings={closings} movements={movements} reload={reload} onNotice={flash}/>}
-    {page==='categories'&&<Categories categories={categories} reload={reload} onNotice={flash}/>}
+    {page==='categories'&&<Categories categories={categories} reload={reload} onNotice={flash} onAsk={setAsk}/>}
     </main><div className="mobile-nav">{pages.map(([id,Icon,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><Icon/><small>{label}</small></button>)}</div>
-    {modal&&<MovementModal initial={editing} categories={categories} accounts={accounts} onClose={()=>setModal(false)} onSave={onSaved}/>}{sheet&&<SessionSheet state={sync} onSignOut={signOff} onClose={()=>setSheet(false)}/>}<div className="sr-live" aria-live="polite">{notice}</div>{notice&&<div className="toast">{notice}</div>}
+    {modal&&<MovementModal initial={editing} categories={categories} accounts={accounts} onClose={()=>setModal(false)} onSave={onSaved}/>}{sheet&&<SessionSheet state={sync} onSignOut={signOff} onClose={()=>setSheet(false)}/>}{ask&&<ConfirmDialog {...ask} onCancel={()=>setAsk(null)}/>}<div className="sr-live" aria-live="polite">{notice}</div>{notice&&<div className="toast">{notice}</div>}
   </div>;
 }
 
@@ -193,12 +205,16 @@ function CategoryModal({type,onClose,onSave}:{type:MovementType;onClose:()=>void
   return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><div className="modal" ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="category-modal-title"><div className="modal-head"><div><span className="eyebrow">Categoría</span><h2 id="category-modal-title">Nueva categoría de {type==='income'?'ingreso':'gasto'}</h2></div><button aria-label="Cerrar" onClick={onClose}><X/></button></div><form onSubmit={submit}><label>Nombre<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="Ej. Ocio"/></label>{error&&<p className="form-error" role="alert">{error}</p>}<div className="form-actions"><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary">Añadir</button></div></form></div></div>;
 }
 
-function Categories({categories,reload,onNotice}:{categories:Category[];reload:()=>Promise<void>;onNotice:(s:string)=>void}){
+function Categories({categories,reload,onNotice,onAsk}:{categories:Category[];reload:()=>Promise<void>;onNotice:(s:string)=>void;onAsk:(c:Confirm|null)=>void}){
  const [open,setOpen]=useState<string[]>(categories.map(c=>c.id)); const [categoryModal,setCategoryModal]=useState<MovementType|null>(null); const toggle=(id:string)=>setOpen(o=>o.includes(id)?o.filter(x=>x!==id):[...o,id]); const editName=async(c:Category,subId?:string)=>{const old=subId?c.subcategories.find(s=>s.id===subId)?.name:c.name;const name=prompt('Nuevo nombre',old);if(!name?.trim())return;const next=subId?{...c,subcategories:c.subcategories.map(s=>s.id===subId?{...s,name:name.trim()}:s)}:{...c,name:name.trim()};await saveCategorySynced(next);await reload();onNotice('Categoría actualizada')}; const archive=async(c:Category,subId?:string)=>{const next=subId?{...c,subcategories:c.subcategories.map(s=>s.id===subId?{...s,archived:!s.archived}:s)}:{...c,archived:!c.archived};await saveCategorySynced(next);await reload()}; const move=async(c:Category,d:number)=>{await saveCategorySynced({...c,order:Math.max(0,c.order+d)});await reload()}; const addSub=async(c:Category)=>{const name=prompt('Nombre de la subcategoría');if(!name?.trim())return;await saveCategorySynced({...c,subcategories:[...c.subcategories,{id:crypto.randomUUID(),name:name.trim(),archived:false,order:c.subcategories.length,updatedAt:new Date().toISOString()}]});await reload()};
- const wipe=async()=>{if(!confirm('Se borrarán todos tus movimientos y cambios de categorías. ¿Continuar?'))return;if(!confirm('Esta acción es irreversible. ¿Borrar definitivamente todos los datos?'))return;
+ // Dos confirmaciones seguidas, como antes: la segunda es el `onConfirm` de la primera. No es
+ // ceremonia de más —es la única acción de la app que no tiene vuelta atrás en ningún dispositivo.
+ const erase=async()=>{onAsk(null);
   // El borrado es el único que exige conexión: se hace primero en el servidor para que los demás
   // dispositivos tiren su cola en vez de repoblar lo que se acaba de vaciar.
   try{await clearAllDataSynced()}catch{onNotice('Necesitas conexión para borrar todo');return}
   await reload();onNotice('Todos los datos se han borrado')};
+ const wipe=()=>onAsk({title:'Borrar todos los datos',body:'Se borrarán todos tus movimientos y los cambios que hayas hecho en las categorías.',confirmLabel:'Continuar',tone:'danger',
+  onConfirm:()=>onAsk({title:'Esto no se puede deshacer',body:'Los datos se borran también en el servidor y en el resto de tus dispositivos. ¿Borrarlos definitivamente?',confirmLabel:'Borrar definitivamente',tone:'danger',onConfirm:erase})});
  return <><div className="category-toolbar"><p>Personaliza la estructura sin perder el historial asociado.</p><div><button className="secondary" onClick={()=>setCategoryModal('income')}><Plus/>Categoría de ingreso</button><button className="primary" onClick={()=>setCategoryModal('expense')}><Plus/>Categoría de gasto</button></div></div><section className="category-columns">{(['income','expense'] as const).map(type=><div key={type}><h2>{type==='income'?'Ingresos':'Gastos'}</h2>{categories.filter(c=>c.type===type).sort((a,b)=>a.order-b.order).map(c=><article className={`category-card ${c.archived?'archived':''}`} key={c.id}><div className="category-head"><button className="expand" onClick={()=>toggle(c.id)}>{open.includes(c.id)?<ChevronUp/>:<ChevronDown/>}</button><strong>{c.name}</strong>{c.archived&&<span className="tag">Archivada</span>}<div className="category-actions"><button onClick={()=>move(c,-1)} aria-label="Subir"><ChevronUp/></button><button onClick={()=>move(c,1)} aria-label="Bajar"><ChevronDown/></button><button onClick={()=>editName(c)} aria-label="Renombrar"><Pencil/></button><button onClick={()=>archive(c)}>{c.archived?'Activar':'Archivar'}</button></div></div>{open.includes(c.id)&&<div className="sub-list">{c.subcategories.sort((a,b)=>a.order-b.order).map(s=><div className={s.archived?'archived':''} key={s.id}><span>{s.name}</span>{s.archived&&<small>Archivada</small>}<button onClick={()=>editName(c,s.id)} aria-label={`Renombrar ${s.name}`}><Pencil/></button><button onClick={()=>archive(c,s.id)}>{s.archived?'Activar':'Archivar'}</button></div>)}<button className="add-sub" onClick={()=>addSub(c)}><CirclePlus/>Añadir subcategoría</button></div>}</article>)}</div>)}</section><section className="danger-zone"><div><h2>Borrar todos los datos</h2><p>Restablece movimientos, preferencias y categorías originales.</p></div><button onClick={wipe}><Trash2/>Borrar todo</button></section>{categoryModal&&<CategoryModal type={categoryModal} onClose={()=>setCategoryModal(null)} onSave={async(name)=>{await saveCategorySynced({id:crypto.randomUUID(),name,type:categoryModal,order:categories.filter(c=>c.type===categoryModal).length,archived:false,updatedAt:new Date().toISOString(),subcategories:[]});setCategoryModal(null);await reload();onNotice('Categoría creada')}}/>}</>;
 }
