@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { WalletCards } from 'lucide-react';
+import { FlaskConical, WalletCards } from 'lucide-react';
+import { enterDemo } from './demo';
 import { signIn } from './supabase';
 import type { AuthFailure } from './supabase';
 
@@ -26,5 +27,10 @@ export default function Login() {
     <label>Contraseña<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••"/></label>
     {error&&<p className="form-error" role="alert">{error}</p>}
     <button className="primary" disabled={sending}>{sending?'Entrando…':'Entrar'}</button>
+    {/* type="button" obligatorio: sin él enviaría el formulario de login antes de entrar en la demo.
+        La nota está en el camino de entrada y no dentro de la demo porque es ahí donde alguien decide
+        si merece la pena probarla: lo que quiere saber es dónde acaba lo que escriba. */}
+    <button type="button" className="secondary" disabled={sending} onClick={enterDemo}><FlaskConical/>Probar la demo</button>
+    <p className="login-note">Datos de ejemplo que se guardan solo en este navegador. No se sube nada a la nube.</p>
   </form></div>;
 }
