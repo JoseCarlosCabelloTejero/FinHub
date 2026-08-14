@@ -126,6 +126,22 @@ crear una segunda.
 `pages` es la **fuente única** de `[id, icono, etiqueta, título]`: la usan el nav lateral, el nav móvil
 y el `<h1>`, que antes repetían la misma lista tres veces.
 
+**Al cambiar de página se vuelve arriba**, con un `useEffect(()=>{window.scrollTo(0,0)},[page])`.
+React desmonta y monta la pantalla, pero nadie toca el scroll del documento: salir de Movimientos por
+el fondo dejaba el Resumen empezado a media página. Tres decisiones detrás:
+
+- **`window` basta**: el scroller es el documento, porque el aside es `position: fixed` y `main` no
+  tiene `overflow` ni altura propios. Si algún día el layout gana un contenedor con scroll, esto deja
+  de funcionar en silencio.
+- **Salto instantáneo, no `behavior: 'smooth'`**: en una navegación se espera el corte, y la regla de
+  `prefers-reduced-motion` del CSS **no** alcanza a un `scrollTo` lanzado desde JS.
+- **En un efecto y no en el `onClick` de los navs**: cubre también los cambios programáticos y no
+  duplica la línea en el nav lateral y en el de móvil.
+
+`Patrimonio` lleva el mismo efecto sobre su `view`, porque sus tres subvistas son un segundo nivel de
+navegación con el mismo síntoma — y ahí importa más, porque el aviso de meses sin cerrar salta a
+*Cierre mensual* desde el fondo de *Nivel*.
+
 En la cabecera, el botón "Nuevo movimiento" se oculta en Categorías **y en Patrimonio**: en ninguna de las
 dos se registran movimientos, y el modal aparecería sobre una pantalla que no tiene nada que ver.
 
@@ -225,8 +241,9 @@ pelearse con esa rejilla.
 
 ## Modales
 
-Los tres de formulario (`MovementModal`, `CategoryModal`, `AccountModal`) y la hoja de sesión
-(`SessionSheet`) comparten el mismo patrón, y sus tres detalles son intencionados:
+Los tres de formulario (`MovementModal`, `CategoryModal`, `AccountModal`), la hoja de sesión
+(`SessionSheet`) y el diálogo de confirmación (`ConfirmDialog`, en `src/Ui.tsx`) comparten el mismo
+patrón, y sus tres detalles son intencionados:
 
 - **El foco va al diálogo, no al primer input**: con `autoFocus` en el campo, el móvil abre el teclado
   nada más montar y empuja el formulario fuera de vista.
@@ -264,6 +281,27 @@ sin querer al no encontrar su opción. Solo se pinta si hay cuentas: sin patrimo
 con una única opción sería ruido. Cambiar de tipo resetea categoría y subcategoría pero **no** la cuenta,
 que no depende del tipo.
 
+### `ConfirmDialog` (`src/Ui.tsx`)
+
+El sustituto del `confirm()` del navegador, que era lo único de la app que no se parecía a la app —y
+aparecía justo en lo irreversible. Vive en `Ui.tsx` y no en `App.tsx` porque quien pregunta puede ser
+cualquier pantalla. Reusa `.modal`, así que hereda gratis la hoja inferior de móvil y el pie sticky;
+lo único suyo en CSS es el ancho (`.modal.confirm`) y el rojo del botón que confirma, que es el mismo
+de la zona de peligro.
+
+- **Se monta una sola vez, arriba en `Finances`** (estado `ask`), y las pantallas piden por él —
+  `Categories` lo recibe como prop `onAsk`. **No puede vivir dentro de `SyncNote`**: en móvil ese
+  componente se renderiza dentro de `SessionSheet`, y habrían quedado dos `.modal-backdrop` del mismo
+  `z-index`, dos listeners de `Escape` sobre `document` y dos bloqueos de `body` compitiendo. Por lo
+  mismo, `signOff` hace `setSheet(false)` antes de abrirlo.
+- **`SyncStatus.tsx` ya no decide políticas**: su botón solo llama a `onSignOut`. Quién pregunta, con
+  qué texto y cuándo (en demo siempre; con sesión, solo si hay cola) es cosa de `App.tsx`. Refuerza la
+  propiedad que ese fichero protege — no importa `./sync` ni `./supabase`, y ahora tampoco lógica.
+- **El foco entra en el diálogo, no en el botón que confirma.** Dejar la acción destructiva debajo del
+  Intro convierte un teclazo en un borrado. Y **devuelve el foco al disparador al cancelar**, como
+  `SessionSheet` y a diferencia de los de formulario: el botón sigue en pantalla.
+- **"Borrar todo" sigue pidiendo dos**, encadenadas: la segunda es el `onConfirm` de la primera.
+
 `AccountModal` sirve para crear **y** para editar (`initial: Account | null`), a diferencia de
 `CategoryModal`: una cuenta tiene cuatro campos y el `prompt()` que basta para renombrar una categoría no
 llega. Su selector Activo/Pasivo usa `.segmented` y **no** el `.type-picker` de los movimientos, que tiñe
@@ -275,7 +313,8 @@ arreglarse—, y no hay nada que migrar al cambiarla porque todas las cifras son
 - Estilo **denso**: sentencias encadenadas en una línea, cuerpos comprimidos. Imita el fichero.
 - Copy en **español**; identificadores en inglés.
 - Las escrituras van por las funciones `*Synced` de [[sync]], **nunca** por [[db]].
-- Acciones destructivas confirman (borrar un movimiento: una; "Borrar todo": dos).
+- Acciones destructivas confirman (borrar un movimiento: una; "Borrar todo": dos), **con
+  `ConfirmDialog` y nunca con el `confirm()` del navegador**.
 - No rompas la accesibilidad ya establecida → [[design-system]].
 
 Related: [[sync]] · [[calculations]] · [[charts]] · [[design-system]] · [[patrimonio]] · [[preferencias]] · [[010-modo-demo]]

@@ -81,7 +81,7 @@ Flujo de datos, de abajo arriba:
 
 **Los tokens de diseño están duplicados a propósito**, en `:root` de `src/styles.css` y en `src/theme.ts`. Recharts recibe colores por props y no puede leer `var()`, de ahí la copia en JS. **Al tocar un color hay que cambiar ambos ficheros.**
 
-**Semántica de color:** verde (`--income`) y rojo (`--expense`) se reservan *exclusivamente* para ingreso/gasto. Todo lo demás es la escala de grises. El donut de categorías usa `theme.ramp`, que solo distingue bien 6 escalones; por eso `CATEGORY_LIMIT = theme.ramp.length` y `topCategories()` agrupa la cola en "Otros". Si añades colores a la rampa, el límite se ajusta solo.
+**Semántica de color:** verde (`--income`) y rojo (`--expense`) se reservan *exclusivamente* para ingreso/gasto. Todo lo demás es la escala de grises. El donut de categorías usa `theme.ramp`, que son **5 tonos** validados: un donut enseña todas sus porciones a la vez, así que la paleta tiene que aguantar el test de *todos* los pares, y con 6 no lo pasa ninguna. Por eso `CATEGORY_LIMIT = theme.ramp.length` (que es además el default de `topCategories()`, para que no se descuadren) y la cola se agrupa en "Otros". El donut pinta con `categoryPalette(ids)` y no color a color: el tono sigue siendo el de la identidad de la categoría, pero **nunca se repite** dentro del mismo gráfico. Si tocas la rampa hay que volver a medirla entera — el procedimiento está en `docs/modules/design-system.md`.
 
 **Migraciones de IndexedDB:** `openDB` está en **versión 3**, con bloques para `oldVersion < 1` y `oldVersion < 3` (la v2 existió como número, sin bloque propio). Un cambio de esquema exige subir la versión *y* añadir su propio bloque guardado por `oldVersion`, sin tocar los anteriores. Antes de subirla, comprueba si hace falta: añadir un campo a `SyncMeta` no la necesita, porque `getSyncMeta()` mergea con los defaults. Detalles y trampas (el backfill sin `await`, la copia desde `cielo-finanzas`) en `docs/flows/migraciones-idb.md`.
 
@@ -89,9 +89,9 @@ Flujo de datos, de abajo arriba:
 
 - **Estilo de código muy denso**: sentencias encadenadas en una línea, cuerpos de componente comprimidos. Es intencionado en este repo — imita el fichero que estés editando en lugar de "normalizar" el formato.
 - **Español en todo lo que ve una persona** (copy de UI, mensajes de error, comentarios, nombres de tests y describes); **inglés en el código** (identificadores, tipos, nombres de fichero).
-- Los comentarios existentes explican el *por qué* de decisiones no obvias (la rampa de 6 grises, el sync de tokens, el indicador de foco único). Cuando quites uno, asegúrate de que la razón ya no aplica.
+- Los comentarios existentes explican el *por qué* de decisiones no obvias (el tamaño de la rampa del donut, el sync de tokens, el indicador de foco único). Cuando quites uno, asegúrate de que la razón ya no aplica.
 - Accesibilidad ya establecida y que no conviene romper: un único indicador de foco (`:focus-visible` con `outline`), región `aria-live` para los avisos, `aria-label` en los botones-icono, `.sr-only` para cabeceras de acciones.
-- Acciones destructivas confirman: borrar un movimiento pide una confirmación, "Borrar todo" pide dos.
+- Acciones destructivas confirman: borrar un movimiento pide una confirmación, "Borrar todo" pide dos. Siempre con `ConfirmDialog` (`src/Ui.tsx`), **nunca con el `confirm()` del navegador**. El diálogo se monta una sola vez en `Finances` y las pantallas piden por el estado `ask`; los `prompt()` de Categorías siguen nativos porque piden un valor, no una confirmación.
 - `src/test/setup.ts` carga `fake-indexeddb/auto` y jest-dom; los tests de `db.ts` dependen de eso y de `clearAllData()` en `beforeEach`.
 
 ## Flujo de ramas

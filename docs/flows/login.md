@@ -150,13 +150,18 @@ Nótese el matiz de `adoptUser`: si `dataUserId` era `null` (primer arranque) **
 - `scope: 'local'`: no llama al servidor, así que funciona sin conexión. Con un único usuario no hay
   otras sesiones que revocar.
 - **No vacía el outbox**: al volver a entrar con la misma cuenta se sube igual. Lo que sí lo tira es
-  entrar con **otra** cuenta, y eso el usuario no puede deducirlo — de ahí el `confirm` que avisa de los
-  cambios sin sincronizar antes de salir.
+  entrar con **otra** cuenta, y eso el usuario no puede deducirlo — de ahí el `ConfirmDialog` que avisa
+  de los cambios sin sincronizar antes de salir. **Solo salta si hay cola**: sin nada pendiente se
+  cierra sesión sin preguntar, porque no hay nada que explicar.
 - El botón vive en el aside **y** en la hoja que abre el chip de la cabecera (`SessionSheet`), que es la
   única vía por debajo de 760 px porque ahí el aside no existe. Es el mismo `SyncNote` renderizado en dos
   sitios, no dos botones. → [[ui-app]]
+- **Quién pregunta es `App.tsx`, no `SyncNote`.** El botón solo llama a `onSignOut`; el diálogo se monta
+  una sola vez arriba y `signOff` cierra antes la `SessionSheet`, porque dos modales anidados se
+  pisarían el `Escape` y el bloqueo de scroll. → [[ui-app]]
 
-En demo, ese botón pasa a ser **"Salir de la demo"** y su `confirm` avisa de lo contrario: no hay nada
-pendiente de subir (nunca se encola), pero salir **sí borra** los datos de prueba.
+En demo, ese botón pasa a ser **"Salir de la demo"** y su diálogo avisa de lo contrario: no hay nada
+pendiente de subir (nunca se encola), pero salir **sí borra** los datos de prueba — así que ahí pregunta
+siempre.
 
 Related: [[supabase-auth]] · [[ui-app]] · [[first-sync]] · [[006-un-solo-usuario]] · [[010-modo-demo]]

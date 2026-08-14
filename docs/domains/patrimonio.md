@@ -325,7 +325,7 @@ nunca fue ingreso/gasto contra el resto, sino **flujo contra nivel**. El enuncia
 [[design-system]], que es quien manda.
 
 Nota relacionada: un gráfico de barras apiladas por cuenta es tentador y no se recomienda. La rampa del
-proyecto solo distingue bien seis escalones, límite ya conocido y ya sufrido en el donut de categorías.
+proyecto solo distingue bien cinco escalones, límite ya conocido y ya sufrido en el donut de categorías.
 De ahí que el gráfico sea **una sola línea** de patrimonio neto y, si acaso algún día, una separación
 activos / pasivos.
 
