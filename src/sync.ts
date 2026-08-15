@@ -305,8 +305,9 @@ export async function clearAllDataSynced() {
   // migratedAt vuelve a null a propósito: el borrado resiembra las categorías por defecto en local y
   // el servidor se ha quedado sin ninguna, así que hay que volver a subirlas o el próximo movimiento
   // no tendría categoría a la que apuntar.
-  await saveSyncMeta({ userId, dataUserId: userId, wipeEpoch: Number(data), migratedAt: null });
+  await saveSyncMeta({ userId, dataUserId: userId, wipeEpoch: Number(data), migratedAt: null, lastFingerprint: null });
   lastPullKey = null;
+  lastFingerprint = null;
   setState({ pendingOps: 0, lastError: null });
   // Cuanto antes se vuelva a vincular, mejor: hasta que las categorías resembradas no estén arriba,
   // un movimiento nuevo no tendría a qué apuntar en el servidor.
@@ -358,6 +359,36 @@ async function pushOutbox() {
 // IndexedDB ni se llama a reload(): sin esto, el sondeo de cada minuto repintaría los gráficos y
 // remontaría la tabla sin que nada hubiera cambiado.
 let lastPullKey: string | null = null;
+
+// Huella del servidor correspondiente al último snapshot aplicado. Es lastPullKey visto desde el otro
+// lado: la misma idea, pero calculada ANTES de mover los datos, así que evita la descarga entera en
+// vez de solo evitar el repintado. Se hidrata desde meta en initSync para sobrevivir a una recarga.
+let lastFingerprint: string | null = null;
+
+/**
+ * ¿Se puede saltar el pull completo? Solo si el servidor dice tener exactamente el estado que ya
+ * aplicamos Y este ciclo no ha subido nada.
+ */
+// El segundo guard no es un detalle: la huella se lee al principio del ciclo, antes del push. Si el
+// push de este mismo ciclo ha cambiado el servidor, esa huella ya es vieja y coincidir con la última
+// aplicada no significa "no hay nada nuevo", sino "aún no me he enterado de lo mío". Sin el guard, un
+// dispositivo se saltaría el pull que confirma sus propias escrituras (y el LWW del servidor puede
+// haber descartado alguna, así que no basta con dar la local por buena).
+export const canSkipPull = (digest: string | null, applied: string | null, pushedSomething: boolean) =>
+  !pushedSomething && !!digest && digest === applied;
+
+/** Lee la huella del servidor: un `md5` del estado más el `wipe_epoch`, en una sola petición. */
+// Sustituye al RPC suelto de current_wipe_epoch(): el ciclo necesitaba las dos cosas y hacía dos
+// viajes. En reposo esta es ya la ÚNICA petición que sale.
+async function fetchFingerprint(): Promise<{ wipeEpoch: number; digest: string | null }> {
+  const { data, error } = await supabase.rpc('sync_fingerprint');
+  if (error) throw new Error(error.message);
+  const row = (data ?? {}) as { wipe_epoch?: number; digest?: string | null };
+  return { wipeEpoch: Number(row.wipe_epoch ?? 0), digest: row.digest ?? null };
+}
+
+/** Recuerda la huella aplicada, en memoria y en disco. */
+const rememberFingerprint = async (digest: string | null) => { lastFingerprint = digest; await saveSyncMeta({ lastFingerprint: digest }); };
 
 async function fetchSnapshot() {
   const [movements, categories, subcategories, accounts, closings] = await Promise.all([
@@ -417,9 +448,12 @@ async function prependOps(ops: OutboxOp[]) {
 // Siempre pull antes que push: subir a ciegas sobre un servidor que ya tiene datos duplicaría el
 // árbol de categorías del otro dispositivo. Es idempotente porque los ids del cliente son la clave
 // primaria en Postgres: repetirlo es un upsert, no una duplicación.
-async function firstSync() {
+// Recibe la huella que runSync acaba de leer para poder dársela a mergeWithServer: sin eso, el
+// pullAndApply del final del mismo ciclo volvía a descargar las cinco tablas enteras para acabar
+// descartándolas contra lastPullKey. Eran los 5 selects de más del primer login.
+async function firstSync(digest: string | null) {
   const { key, snapshot, empty } = await fetchSnapshot();
-  if (empty) await uploadEverything(); else await mergeWithServer(snapshot, key);
+  if (empty) await uploadEverything(); else await mergeWithServer(snapshot, key, digest);
   await saveSyncMeta({ migratedAt: new Date().toISOString() });
 }
 
@@ -437,7 +471,7 @@ async function uploadEverything() {
 // existe aquí: los movimientos son uuid y no chocan, y las categorías comparten id porque los slugs
 // son deterministas. Se sube lo que el servidor no tiene y lo que este dispositivo haya tocado; las
 // semillas intactas se reconocen por su sello de época y se descartan sin más.
-async function mergeWithServer(snapshot: Snapshot, key: string) {
+async function mergeWithServer(snapshot: Snapshot, key: string, digest: string | null) {
   const local = await getAllData();
   const remoteCategories = new Set(snapshot.categories.map((category) => category.id));
   const remoteSubs = new Set(snapshot.categories.flatMap((category) => category.subcategories.map((sub) => sub.id)));
@@ -466,11 +500,20 @@ async function mergeWithServer(snapshot: Snapshot, key: string) {
   // Lo encolado se reproduce sobre el snapshot, así que sobrevive a esta sustitución de la caché.
   await replaceLocalData((pending) => applyPullToLocal(snapshot, pending));
   lastPullKey = key;
+  // La huella corresponde al snapshot que se acaba de aplicar, así que vale igual que si viniera de
+  // un pullAndApply. Si este merge ha encolado ops, el ciclo ni llegará al pull (la cola no está
+  // vacía); si no ha encolado nada, el cortocircuito se lo salta, y ahí están los 5 selects que se
+  // ahorra el primer login.
+  await rememberFingerprint(digest);
   await onRemoteChange?.();
 }
 
-async function pullAndApply() {
+async function pullAndApply(digest: string | null) {
   const { key, snapshot } = await fetchSnapshot();
+  // Se apunta la huella ANTES del return, no después: el caso en que el snapshot resulta idéntico es
+  // justo aquel en el que el próximo ciclo tiene que poder ahorrarse la descarga. Dejarlo al final
+  // habría hecho que un servidor que no cambia nunca se descargara para siempre.
+  await rememberFingerprint(digest);
   if (key === lastPullKey) return;
   await replaceLocalData((pending) => applyPullToLocal(snapshot, pending));
   lastPullKey = key;
@@ -522,16 +565,31 @@ async function runSync() {
   setState({ status: 'syncing' });
   try {
     const meta = await adoptUser(userId);
-    await adoptWipeEpoch(meta.wipeEpoch);
+    // Una sola petición para las dos cosas que hacen falta antes de decidir nada: el epoch (que antes
+    // tenía su propio RPC) y la huella del estado del servidor.
+    const { wipeEpoch, digest } = await fetchFingerprint();
+    await adoptWipeEpoch(meta.wipeEpoch, wipeEpoch);
     // Antes del push: hasta que este dispositivo no se ha vinculado, su cola no basta para dejar el
     // servidor coherente (las categorías por defecto se siembran en local y nunca pasan por ella, así
     // que un movimiento suyo se estrellaría contra la FK).
-    if (!meta.migratedAt) await firstSync();
+    if (!meta.migratedAt) await firstSync(digest);
+    // Se mira ANTES del push, que es lo que la vacía. Es el dato que decide si la huella leída arriba
+    // sigue siendo válida: ver canSkipPull.
+    const pushedSomething = (await readOutbox()).length > 0;
     if (!(await pushOutbox())) { setState({ status: 'error' }); return; }
     // Solo se hace pull con la cola vacía: aplicar el snapshot con escrituras sin subir dejaría la
     // pantalla mostrando la versión vieja de algo que el usuario acaba de escribir.
     if ((await readOutbox()).length) { setState({ status: 'idle' }); return; }
-    await pullAndApply();
+    if (!canSkipPull(digest, lastFingerprint, pushedSomething)) {
+      // Tras un push, `digest` describe el servidor de ANTES de subir, así que apuntarlo dejaría al
+      // ciclo siguiente creyendo que hay novedades y bajándose las cinco tablas para nada. Releerlo
+      // cuesta una petición pequeña y ahorra un pull entero.
+      //
+      // Se relee ANTES del snapshot y nunca después: una huella tomada después taparía un cambio
+      // ocurrido entre medias. Equivocarse aquí tiene que costar una descarga de más, jamás una
+      // menos.
+      await pullAndApply(pushedSomething ? (await fetchFingerprint()).digest : digest);
+    }
     const lastSyncAt = new Date().toISOString();
     await saveSyncMeta({ lastSyncAt });
     setState({ status: 'idle', lastSyncAt });
@@ -545,9 +603,13 @@ async function runSync() {
 // mirar meta.userId, que resolveUserId() ya ha puesto al día con el usuario actual.
 async function adoptUser(userId: string) {
   const meta = await getSyncMeta();
+  // Rehidratar la huella al principio de CADA ciclo, no solo al arrancar: es lo que la hace
+  // sobrevivir a una recarga de la página, y de paso hace que dos pestañas del mismo navegador no
+  // trabajen con copias distintas (comparten IndexedDB, no variables de módulo).
+  lastFingerprint = meta.lastFingerprint;
   if (meta.dataUserId === userId) return meta;
-  if (meta.dataUserId) { await clearOutbox(); lastPullKey = null; }
-  await saveSyncMeta({ dataUserId: userId, ...(meta.dataUserId ? { migratedAt: null, wipeEpoch: 0, lastSyncAt: null } : {}) });
+  if (meta.dataUserId) { await clearOutbox(); lastPullKey = null; lastFingerprint = null; }
+  await saveSyncMeta({ dataUserId: userId, ...(meta.dataUserId ? { migratedAt: null, wipeEpoch: 0, lastSyncAt: null, lastFingerprint: null } : {}) });
   return getSyncMeta();
 }
 
@@ -555,14 +617,17 @@ async function adoptUser(userId: string) {
 // sin conexión y con cambios encolados: subirlos repoblaría lo que se acaba de vaciar. El wipe purga
 // también las lápidas, así que el trigger anti-resurrección no cubre este caso; el epoch es la única
 // defensa, y por eso se comprueba ANTES de pushear.
-async function adoptWipeEpoch(localEpoch: number) {
-  const { data, error } = await supabase.rpc('current_wipe_epoch');
-  if (error) throw new Error(error.message);
-  const remoteEpoch = Number(data);
+// El epoch remoto ya viene leído desde fetchFingerprint(): antes esta función hacía su propio RPC, y
+// el ciclo gastaba dos viajes para dos datos que se piden siempre juntos.
+async function adoptWipeEpoch(localEpoch: number, remoteEpoch: number) {
   if (remoteEpoch === localEpoch) return;
   await clearOutbox();
   await saveSyncMeta({ wipeEpoch: remoteEpoch });
   lastPullKey = null;
+  // Tirar también la huella: acaban de borrarlo todo desde otro dispositivo, así que la caché local
+  // no vale nada y el pull que la repuebla no se puede saltar. Sin esta línea, el cortocircuito le
+  // creería a una huella que describe un estado que ya no existe.
+  await rememberFingerprint(null);
   setState({ pendingOps: 0 });
 }
 

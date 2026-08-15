@@ -104,6 +104,10 @@ export interface SyncMeta {
   lastSyncAt: string | null;
   wipeEpoch: number;
   lastStampAt: string | null;
+  // Huella del último snapshot aplicado, tal y como la devolvió sync_fingerprint() en el servidor.
+  // Se persiste y no solo se guarda en memoria porque en una PWA recargar la página es el caso
+  // común, y con la huella en una variable de módulo cada recarga volvía a descargarlo todo.
+  lastFingerprint: string | null;
 }
 
 // 'demo' es un estado terminal: en modo demo el motor no arranca, así que se fija una vez y no cambia
