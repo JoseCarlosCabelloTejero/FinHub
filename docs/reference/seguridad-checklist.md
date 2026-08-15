@@ -110,6 +110,22 @@ inserta `wipe_all_data()`.
 puede comprobar que no hay regresión. La comprobación de verdad es repetir la llamada de la tabla de
 arriba contra producción después del `db push`.
 
+✅ **Hecho el 2026-08-15 tras aplicar la migración**: producción responde ya `permission denied for
+function` en `current_wipe_epoch`, `sync_fingerprint` e `iso_now`, igual que local. `wipe_all_data()`
+**no se sondeó**, y no hace falta: los cuatro `revoke` van en la misma migración, que se aplica
+atómicamente, y las otras tres cambiaron.
+
+**Cómo repetir esta auditoría** (solo lectura, y la anon key es pública por diseño):
+
+```bash
+URL=$(grep '^VITE_SUPABASE_URL=' .env.local | cut -d= -f2-)
+AK=$(grep '^VITE_SUPABASE_ANON_KEY=' .env.local | cut -d= -f2-)
+curl -s -X POST "$URL/rest/v1/rpc/current_wipe_epoch" -H "apikey: $AK" \
+  -H 'Content-Type: application/json' -d '{}'
+# Se espera: permission denied for FUNCTION current_wipe_epoch
+# Si dijera "for TABLE sync_meta", anon habría recuperado el EXECUTE.
+```
+
 ## 5. Hallazgo abierto — `signOut` no revoca el refresh token
 
 `src/supabase.ts:40` usa `signOut({ scope: 'local' })`. **Es una decisión, no un descuido**: `'global'`
