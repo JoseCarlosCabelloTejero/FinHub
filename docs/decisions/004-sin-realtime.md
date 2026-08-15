@@ -42,12 +42,17 @@ otro dispositivo escribe", que en una app personal es raro.
 - **La latencia máxima con la app abierta y visible es de 60 s**; al volver a la pestaña, inmediata.
 - **El sondeo no corre en segundo plano** a propósito: gastaría batería para nada, porque al volver a la
   pestaña el propio `visibilitychange` ya sincroniza.
-- Cada pull se trae **las tres tablas completas**, así que hace falta `lastPullKey` para no repintar la
-  pantalla cuando el servidor devuelve exactamente lo mismo. Con Realtime llegarían deltas y esto no
-  haría falta. → [[pull]]
+- Cuando hay pull se trae **las cinco tablas completas**, así que hace falta `lastPullKey` para no
+  repintar la pantalla cuando el servidor devuelve exactamente lo mismo. Con Realtime llegarían deltas
+  y esto no haría falta. → [[pull]]
+- **El sondeo de 60 s dejó de ser caro** con la huella `sync_fingerprint()`: un ciclo sobre un servidor
+  que no ha cambiado cuesta una petición pequeña en vez de seis. Eso quita casi todo el argumento
+  económico a favor de Realtime; lo que queda es la latencia, que sigue sin importar aquí.
+  → [[011-huella-de-sincronizacion]]
 - Si el volumen creciera mucho, el orden de las mejoras sería: **primero pull incremental** (índice
-  `movements (user_id, updated_at)`), y solo después plantearse Realtime.
+  `movements (user_id, updated_at)` **y** una forma de ver los borrados), y solo después plantearse
+  Realtime.
 
 ## Relacionadas
 
-[[001-local-first-a-supabase]] · [[pull]] · [[sync]] · [[sync-model]]
+[[001-local-first-a-supabase]] · [[pull]] · [[sync]] · [[sync-model]] · [[011-huella-de-sincronizacion]]

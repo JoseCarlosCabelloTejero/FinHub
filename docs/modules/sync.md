@@ -163,11 +163,33 @@ Dos detalles:
 
 ## Pull
 
-`fetchSnapshot()` se trae las cinco tablas enteras en paralelo y calcula una `key` (el JSON de las
-filas). Si coincide con `lastPullKey` **no se reescribe IndexedDB ni se llama a `reload()`**: sin eso,
-el sondeo de cada minuto repintaría los gráficos y remontaría la tabla sin que nada hubiera cambiado.
+Hay **dos redes**, y conviene no confundirlas porque atacan cosas distintas:
+
+1. **La huella (`sync_fingerprint`), en el servidor y antes de descargar.** `fetchFingerprint()` pide
+   un `md5` del estado más el `wipe_epoch` en una sola petición. Si el digest coincide con el del
+   último snapshot aplicado **el pull no llega a ocurrir**: el ciclo en reposo se queda en esa única
+   petición. → [[011-huella-de-sincronizacion]]
+2. **`lastPullKey`, en el cliente y después de descargar.** Cuando el pull sí ocurre, `fetchSnapshot()`
+   calcula una `key` (el JSON de las filas); si coincide **no se reescribe IndexedDB ni se llama a
+   `reload()`**, así que no se repintan los gráficos ni se remonta la tabla.
+
+La segunda sigue haciendo falta con la primera puesta: la huella se lee **antes** del push, así que en
+un ciclo que ha escrito no se puede confiar en ella y el pull se hace igual — ahí es donde
+`lastPullKey` evita el repintado. Eso es exactamente lo que decide `canSkipPull(digest, aplicada,
+pushedSomething)`, que es puro y está testeado.
+
+`fetchSnapshot()` se trae las cinco tablas en paralelo, cada una con **su lista explícita de columnas**
+(`MOVEMENT_COLS` y compañía, espejo de los tipos `*Row`) y no con `select('*')`: así no viaja `user_id`
+en cada fila y, sobre todo, una columna nueva en el servidor deja de cambiar `lastPullKey` y de forzar
+un repintado espurio en todos los dispositivos.
+
 "Servidor vacío" se sigue midiendo por **categorías**: son la única semilla obligatoria (no existir
 cuentas es un estado normal). → [[pull]]
+
+La huella se **persiste** en `meta.lastFingerprint` y se rehidrata al principio de cada ciclo (dentro
+de `adoptUser`): en una variable de módulo se perdía al recargar la página, que en una PWA es el caso
+común. Se invalida en los tres sitios que invalidan la caché local — cambio de usuario, epoch de wipe
+ajeno y "Borrar todo" —; olvidar uno deja la pantalla mostrando datos que ya no existen.
 
 En `snapshotToOps` (la subida de un snapshot entero), el orden causal es **cuentas → cierres →
 categorías → subcategorías → movimientos**: los cierres y los movimientos dependen de su cuenta por FK,
@@ -184,13 +206,27 @@ El orden **no es negociable**:
 
 0. En demo, fuera antes de todo lo demás (ver arriba).
 1. Sin red → `offline`, fuera. Sin `userId` → `auth-required`, fuera.
-2. `adoptUser(userId)` — ¿la caché es de otro usuario? → [[login]]
-3. `adoptWipeEpoch(...)` — ¿alguien hizo "Borrar todo"? **Antes del push.** → [[borrado-total]]
-4. `firstSync()` si `!meta.migratedAt` — antes del push, porque hasta que el dispositivo no se ha
-   vinculado su cola no basta para dejar el servidor coherente. → [[first-sync]]
-5. `pushOutbox()`. Si aborta → `error` y no se hace pull.
-6. **Pull solo con la cola vacía**: aplicar el snapshot con escrituras sin subir dejaría la pantalla
+2. `adoptUser(userId)` — ¿la caché es de otro usuario? Rehidrata también la huella. → [[login]]
+3. `fetchFingerprint()` — la **única** petición del ciclo en reposo: trae el digest y el `wipe_epoch`
+   juntos, porque se necesitan siempre a la vez. → [[011-huella-de-sincronizacion]]
+4. `adoptWipeEpoch(local, remoto)` — ¿alguien hizo "Borrar todo"? **Antes del push.** Ya no hace su
+   propio RPC: recibe el epoch del paso anterior. → [[borrado-total]]
+5. `firstSync(digest)` si `!meta.migratedAt` — antes del push, porque hasta que el dispositivo no se ha
+   vinculado su cola no basta para dejar el servidor coherente. Recibe el digest para que
+   `mergeWithServer` lo apunte: sin eso el pull del final del mismo ciclo volvía a descargar las cinco
+   tablas para tirarlas contra `lastPullKey`. → [[first-sync]]
+6. `pushOutbox()`. Si aborta → `error` y no se hace pull. Se anota **antes** si la cola traía algo,
+   porque es lo que decide si la huella del paso 3 sigue valiendo.
+7. **Pull solo con la cola vacía**: aplicar el snapshot con escrituras sin subir dejaría la pantalla
    mostrando la versión vieja de algo que el usuario acaba de escribir.
+8. **Y solo si `canSkipPull` dice que no**: huella distinta, o este ciclo ha subido algo. Un ciclo que
+   ha escrito pulla siempre, porque el LWW del servidor puede haber descartado alguna de sus ops y dar
+   la versión local por buena sería creerse una escritura que no se aplicó.
+9. **Si se ha subido algo, la huella se relee antes de pullear.** La del paso 3 describe el servidor de
+   *antes* del push; apuntar esa dejaba al ciclo siguiente bajándose las cinco tablas para nada (un
+   pull de más por cada push). Se relee **antes** del snapshot y nunca después: una huella posterior
+   taparía un cambio ocurrido entre medias. **Equivocarse aquí tiene que costar una descarga de más,
+   jamás una menos.**
 
 `syncNow()` funde las llamadas concurrentes en una sola ejecución más un repaso (`rerun`), y `withLock`
 añade un **web lock** (`navigator.locks`) para que dos pestañas del mismo navegador —que comparten

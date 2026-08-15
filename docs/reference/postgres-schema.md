@@ -166,7 +166,15 @@ sostiene el modelo: sin ella, un payload con `user_id` ajeno se colaría pese al
 |---|---|---|
 | `iso_now()` | stable, invoker | "Ahora" con el formato **exacto** de `toISOString()` |
 | `current_wipe_epoch()` | stable, invoker | Lee el epoch; devuelve 0 si no hay fila (evita un `PGRST116`) |
+| `sync_fingerprint()` | stable, invoker | `{digest, wipe_epoch}`: huella del estado para saltarse el pull → [[011-huella-de-sincronizacion]] |
 | `wipe_all_data()` | **definer** | Borrado total; devuelve el nuevo epoch → [[borrado-total]] |
+
+`sync_fingerprint()` es **`security invoker` y eso no es un detalle**: pasa por RLS, así que el `md5`
+se calcula solo sobre las filas del llamante. Como `definer` vería las filas de todos y filtraría por
+diferencia de digest — un oráculo sobre datos ajenos. Reutiliza `current_wipe_epoch()` en vez de
+repetir su `coalesce`, y devuelve las dos cosas juntas porque el ciclo de sync las pide siempre a la
+vez. Grants: `revoke all ... from public` + `grant execute ... to authenticated` (verificado: con la
+anon key suelta responde `42501 permission denied`).
 
 Postgres concede `EXECUTE` a `PUBLIC` en toda función nueva, así que el fichero **revoca antes de
 conceder**. Crítico en `wipe_all_data()`, que es `SECURITY DEFINER`. Las funciones de trigger no se
@@ -182,16 +190,27 @@ blindan porque Postgres se niega a ejecutarlas fuera de un trigger.
    (renombrar, archivar, reordenar, añadir).
 5. `updated_at` **monótono por dispositivo** → `monotonicStamp` en [[sync]].
 6. `subcategoryId`: el modal usa `value=""` → mapear `''` a `null`.
-7. **Antes de cada push, leer `current_wipe_epoch()`**: un wipe purga las lápidas, así que el trigger
-   anti-resurrección no protege ahí.
-8. `"order"` choca con el parámetro reservado `order` de PostgREST: **no se puede filtrar por él vía
-   API**. Inofensivo, la UI ordena en JS.
+7. **Antes de cada push, leer el epoch**: un wipe purga las lápidas, así que el trigger
+   anti-resurrección no protege ahí. Hoy llega dentro de `sync_fingerprint()`, junto al digest.
+8. `"order"` choca con el parámetro reservado `order` de PostgREST: **no se puede filtrar ni ordenar
+   por él vía API**. Inofensivo, la UI ordena en JS. Ojo a la lectura fácil de esta nota: **sí se puede
+   nombrar dentro de `select=`**, sin comillas ni alias, y es lo que hacen `CATEGORY_COLS` y
+   `ACCOUNT_COLS` en [[sync]] (verificado contra PostgREST, HTTP 200).
+
+Y una novena que no está en el SQL pero manda igual:
+
+9. **Los `select` del pull llevan lista explícita de columnas, nunca `select('*')`.** Con `*` viajaba
+   `user_id` en cada fila —no es un secreto, es el uid del propio llamante, pero son bytes— y, peor,
+   cualquier columna nueva en el servidor cambiaba el `lastPullKey` del cliente y forzaba un repintado
+   espurio en todos los dispositivos. Al añadir una columna hay que actualizar su `*Row` **y** su lista
+   de columnas en `src/sync.ts`.
 
 ## Migraciones
 
-Dos: `20260808133140_schema.sql` (esquema base) y `20260812173707_patrimonio.sql` (cuentas y cierres;
-también recrea `wipe_all_data()` para que barra las tablas nuevas → [[borrado-total]]). Ambas terminan
+Tres: `20260808133140_schema.sql` (esquema base), `20260812173707_patrimonio.sql` (cuentas y cierres;
+también recrea `wipe_all_data()` para que barra las tablas nuevas → [[borrado-total]]) y
+`20260815172816_sync_fingerprint.sql` (el RPC de la huella; no toca ninguna tabla). Las tres terminan
 con `notify pgrst, 'reload schema'`, necesario en un `db push` remoto (`db reset` ya lo hace). Para
 trabajar en local ver [[comandos-y-entorno]].
 
-Related: [[sync-model]] · [[sync]] · [[borrado-total]] · [[supabase-auth]] · [[comandos-y-entorno]]
+Related: [[sync-model]] · [[sync]] · [[borrado-total]] · [[supabase-auth]] · [[comandos-y-entorno]] · [[seguridad-checklist]] · [[011-huella-de-sincronizacion]]

@@ -119,9 +119,13 @@ Regla práctica: **la coherencia la garantiza el servidor; el cliente solo inten
 
 - **No hay merge de campos**: si dos dispositivos editan el mismo movimiento, el que gana se lleva la
   fila entera. Aceptable con un solo usuario y volumen bajo de escritura.
-- **No hay pull incremental**: cada pull se trae las tres tablas completas. Con cientos de movimientos
-  es irrelevante; con decenas de miles habría que añadir `movements (user_id, updated_at)` y filtrar por
-  `updated_at`. → [[postgres-schema]]
+- **No hay pull incremental**: cuando hay pull, se trae las **cinco** tablas completas. Lo que sí hay es
+  una capa previa que evita el pull entero cuando nada ha cambiado — la huella `sync_fingerprint()`,
+  que resuelve el caso frecuente sin tocar el modelo. → [[011-huella-de-sincronizacion]]
+  Un pull de verdad incremental sigue sin existir, y no es gratis: filtrar por `updated_at` no ve los
+  **borrados** (los movimientos se borran de verdad y su lápida es server-only), así que haría falta
+  exponer `movement_tombstones` o añadir un `deleted_at`. Con decenas de miles de movimientos habría
+  que pagarlo; hoy no. → [[postgres-schema]]
 - **No hay tiempo real**: la latencia es el sondeo de 60 s o el `visibilitychange`. → [[004-sin-realtime]]
 
-Related: [[sync]] · [[first-sync]] · [[pull]] · [[escritura-local]] · [[borrado-total]] · [[postgres-schema]] · [[010-modo-demo]]
+Related: [[sync]] · [[first-sync]] · [[pull]] · [[escritura-local]] · [[borrado-total]] · [[postgres-schema]] · [[010-modo-demo]] · [[011-huella-de-sincronizacion]]
