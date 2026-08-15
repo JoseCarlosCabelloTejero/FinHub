@@ -31,7 +31,7 @@ const LEGACY_DB_NAME = 'cielo-finanzas';
 // Los campos nuevos no obligan a subir la versión de la base: `meta` es un store out-of-line con un
 // único registro y getSyncMeta lo mergea con estos defaults, así que un registro viejo se completa
 // solo al leerlo.
-const DEFAULT_SYNC_META: SyncMeta = { userId: null, dataUserId: null, migratedAt: null, lastSyncAt: null, wipeEpoch: 0, lastStampAt: null };
+const DEFAULT_SYNC_META: SyncMeta = { userId: null, dataUserId: null, migratedAt: null, lastSyncAt: null, wipeEpoch: 0, lastStampAt: null, lastFingerprint: null };
 const META_KEY = 'sync';
 
 // true solo si la base "finhub-finanzas" no existía y se ha creado ahora mismo (oldVersion 0):

@@ -27,6 +27,6 @@ describe('reemplazo de la caché local',()=>{
 
 describe('meta de sync',()=>{
   beforeEach(async()=>clearAllData());
-  it('devuelve valores por defecto cuando no hay registro',async()=>expect(await getSyncMeta()).toEqual({userId:null,dataUserId:null,migratedAt:null,lastSyncAt:null,wipeEpoch:0,lastStampAt:null}));
+  it('devuelve valores por defecto cuando no hay registro',async()=>expect(await getSyncMeta()).toEqual({userId:null,dataUserId:null,migratedAt:null,lastSyncAt:null,wipeEpoch:0,lastStampAt:null,lastFingerprint:null}));
   it('un parche no pisa el resto de campos',async()=>{await saveSyncMeta({userId:'u1'});await saveSyncMeta({wipeEpoch:3});const meta=await getSyncMeta();expect(meta.userId).toBe('u1');expect(meta.wipeEpoch).toBe(3)});
 });

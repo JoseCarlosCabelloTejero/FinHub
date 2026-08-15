@@ -106,9 +106,11 @@ que hacerlo a mano** en el proyecto remoto:
 
 ### Entorno local (`supabase start`)
 
-`supabase/config.toml` ya lleva `enable_signup = false` tanto en `[auth]` (línea ~181) como en
-`[auth.email]` (línea ~227) — **los dos tienen que estar en `false`** para cerrar la puerta—, así que el
-local se comporta igual que producción. El usuario de pruebas se crea desde Studio
+`supabase/config.toml` lleva **`enable_signup = false` en `[auth]`** (línea ~183), y eso es lo que
+cierra la puerta: llega a gotrue como `GOTRUE_DISABLE_SIGNUP`. El de `[auth.email]` (línea ~232) está
+en **`true`** a propósito y **no es un olvido**: ese flag es en realidad `GOTRUE_EXTERNAL_EMAIL_ENABLED`
+y lo que activa es el *proveedor* de email entero — ponerlo en `false` dejaría sin funcionar el propio
+login con contraseña. Así que el local se comporta igual que producción. El usuario de pruebas se crea desde Studio
 (http://localhost:54323 → Authentication → Add user): la **API de admin no pasa por ese flag**.
 
 ## Comportamiento offline (limitación asumida)

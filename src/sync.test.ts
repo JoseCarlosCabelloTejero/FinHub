@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyPullToLocal, assembleCategories, diffCategoryDoc, fromAccountRow, fromClosingRow, fromMovementRow, monotonicStamp, repairDanglingRefs, toAccountRow, toCategoryRow, toClosingRow, toMovementRow, toSubRow } from './sync';
+import { applyPullToLocal, assembleCategories, canSkipPull, diffCategoryDoc, fromAccountRow, fromClosingRow, fromMovementRow, monotonicStamp, repairDanglingRefs, toAccountRow, toCategoryRow, toClosingRow, toMovementRow, toSubRow } from './sync';
 import { defaultCategories } from './data';
 import type { Account, Category, Closing, Movement, OutboxOp, Subcategory } from './types';
 
@@ -185,6 +185,18 @@ describe('monotonicStamp', () => {
   it('sin sello previo devuelve la hora actual', () => expect(monotonicStamp(Date.parse(STAMP), null)).toBe(STAMP));
 });
 
+describe('canSkipPull', () => {
+  it('se salta el pull cuando la huella es la misma y no se ha subido nada', () => expect(canSkipPull('d0', 'd0', false)).toBe(true));
+  it('pulla cuando la huella del servidor ha cambiado', () => expect(canSkipPull('d1', 'd0', false)).toBe(false));
+  it('pulla cuando nunca se ha aplicado ninguna', () => expect(canSkipPull('d0', null, false)).toBe(false));
+  // La huella se lee al principio del ciclo, antes del push: si este ciclo ha subido algo, ya es
+  // vieja y coincidir no significa "no hay nada nuevo".
+  it('pulla siempre después de subir algo, aunque la huella coincida', () => expect(canSkipPull('d0', 'd0', true)).toBe(false));
+  // Un servidor que no responde la huella (o una versión sin el RPC) tiene que degradar al
+  // comportamiento de antes: descargarlo todo, nunca saltárselo.
+  it('sin huella del servidor no se salta nada', () => expect(canSkipPull(null, null, false)).toBe(false));
+});
+
 // El motor guarda estado a nivel de módulo (cola en vuelo, huella del último pull, último sello), así
 // que cada test necesita un módulo recién importado y no basta con limpiar IndexedDB.
 describe('motor de sync', () => {
@@ -202,7 +214,9 @@ describe('motor de sync', () => {
     // (fingirlo también deja colgada cualquier operación contra la base).
     vi.resetModules(); vi.clearAllMocks(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     mocks.resolveUserId.mockResolvedValue('u1');
-    mocks.rpc.mockResolvedValue({ data: 0, error: null });
+    // Forma que devuelve sync_fingerprint(): epoch y digest en la misma respuesta. Un digest estable
+    // entre llamadas es justo lo que permite al segundo ciclo saltarse el pull.
+    mocks.rpc.mockResolvedValue({ data: { wipe_epoch: 0, digest: 'd0' }, error: null });
     mocks.upsert.mockResolvedValue({ error: null });
     mocks.remove.mockResolvedValue({ error: null });
     mocks.select.mockResolvedValue({ data: [], error: null });
@@ -260,6 +274,77 @@ describe('motor de sync', () => {
     stop();
   });
 
+  it('no descarga las tablas cuando la huella del servidor no ha cambiado', async () => {
+    await sync.syncNow();
+    expect(mocks.select).toHaveBeenCalled();
+    mocks.select.mockClear();
+    await sync.syncNow();
+    // Este es el objetivo entero del cambio: el segundo ciclo se queda en el RPC de la huella y no
+    // llega a pedir ni una tabla.
+    expect(mocks.select).not.toHaveBeenCalled();
+  });
+
+  // La cifra que justifica todo el cambio: el ciclo en reposo (arranque con caché, sondeo de 60 s,
+  // visibilitychange) pasa de 6 peticiones —el RPC del epoch más las cinco tablas— a exactamente 1.
+  it('un ciclo en reposo cuesta una sola petición', async () => {
+    await sync.syncNow();
+    vi.clearAllMocks();
+    mocks.rpc.mockResolvedValue({ data: { wipe_epoch: 0, digest: 'd0' }, error: null });
+    await sync.syncNow();
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.select).not.toHaveBeenCalled();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it('vuelve a descargar en cuanto la huella cambia', async () => {
+    await sync.syncNow();
+    mocks.select.mockClear();
+    mocks.rpc.mockResolvedValue({ data: { wipe_epoch: 0, digest: 'otro' }, error: null });
+    await sync.syncNow();
+    expect(mocks.select).toHaveBeenCalled();
+  });
+
+  it('hace pull tras subir algo aunque la huella no haya cambiado', async () => {
+    await sync.syncNow();          // deja la huella 'd0' aplicada
+    mocks.select.mockClear();
+    await queue(opFor('a'));
+    await sync.syncNow();
+    // La huella se leyó antes del push, así que da igual que coincida: hay que confirmar lo subido.
+    expect(pushedIds()).toEqual(['a']);
+    expect(mocks.select).toHaveBeenCalled();
+  });
+
+  // Cazado en la QA: el ciclo posterior a un push se bajaba las cinco tablas para nada. La huella se
+  // lee antes de subir, así que la que se apuntaba describía el servidor de ANTES del push y el ciclo
+  // siguiente la veía distinta. Un pull de más por cada push, autocorrectivo pero gratuito de evitar.
+  it('tras un push no se descarga de más en el ciclo siguiente', async () => {
+    await sync.syncNow();
+    await queue(opFor('a'));
+    mocks.rpc
+      .mockResolvedValueOnce({ data: { wipe_epoch: 0, digest: 'antes' }, error: null })  // antes de subir
+      .mockResolvedValue({ data: { wipe_epoch: 0, digest: 'despues' }, error: null });   // ya con lo subido
+    await sync.syncNow();          // sube y pulla: correcto, aquí sí toca
+    mocks.select.mockClear();
+    await sync.syncNow();          // el servidor no ha cambiado desde el pull anterior
+    expect(mocks.select).not.toHaveBeenCalled();
+  });
+
+  it('persiste la huella para que una recarga no vuelva a descargarlo todo', async () => {
+    await sync.syncNow();
+    expect((await db.getSyncMeta()).lastFingerprint).toBe('d0');
+  });
+
+  it('un borrado total en otro dispositivo tira también la huella', async () => {
+    await sync.syncNow();
+    mocks.rpc.mockResolvedValue({ data: { wipe_epoch: 9, digest: 'd0' }, error: null });
+    mocks.select.mockClear();
+    await sync.syncNow();
+    // El digest sigue siendo 'd0', así que sin invalidar la huella el cortocircuito se habría saltado
+    // el pull que vacía la pantalla, y el usuario seguiría viendo datos que ya no existen.
+    expect(mocks.select).toHaveBeenCalled();
+  });
+
   it('funde las llamadas concurrentes en una ejecución y un repaso', async () => {
     await Promise.all([sync.syncNow(), sync.syncNow(), sync.syncNow()]);
     expect(mocks.rpc).toHaveBeenCalledTimes(2);
@@ -275,7 +360,7 @@ describe('motor de sync', () => {
 
   it('un borrado total en otro dispositivo tira la cola en vez de repoblarlo', async () => {
     await queue(opFor('a'));
-    mocks.rpc.mockResolvedValue({ data: 4, error: null });
+    mocks.rpc.mockResolvedValue({ data: { wipe_epoch: 4, digest: 'd1' }, error: null });
     await sync.syncNow();
     expect(mocks.upsert).not.toHaveBeenCalled();
     expect(await db.readOutbox()).toHaveLength(0);
@@ -383,6 +468,16 @@ describe('motor de sync', () => {
       expect((await db.getAllData()).movements.map((m) => m.id)).toEqual(['m1']);
     });
 
+    // Con el servidor YA POBLADO, el primer login hacía dos rondas completas: la de firstSync y la del
+    // pullAndApply del mismo ciclo, que se descargaba entero para tirarlo contra lastPullKey.
+    // (En un servidor virgen siguen siendo dos, y debe ser así: uploadEverything sube todo, y hay que
+    // pullear para confirmar qué aceptó el LWW del servidor.)
+    it('con el servidor poblado, el primer login descarga las cinco tablas una sola vez', async () => {
+      mocks.select.mockImplementation(remoteSeeds);
+      await sync.syncNow();
+      expect(mocks.select).toHaveBeenCalledTimes(5);
+    });
+
     it('sí reenvía una categoría que este dispositivo había tocado', async () => {
       mocks.select.mockImplementation(remoteSeeds);
       await db.saveCategory({ ...defaultCategories[0], name: 'Mis ingresos', updatedAt: STAMP });
@@ -461,7 +556,7 @@ describe('modo demo', () => {
     localStorage.setItem('finhub-demo', '1');
     vi.resetModules(); vi.clearAllMocks(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     mocks.resolveUserId.mockResolvedValue('u1');
-    mocks.rpc.mockResolvedValue({ data: 0, error: null });
+    mocks.rpc.mockResolvedValue({ data: { wipe_epoch: 0, digest: 'd0' }, error: null });
     db = await import('./db');
     await db.clearAllData();
     sync = await import('./sync');

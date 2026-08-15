@@ -51,6 +51,7 @@ barato que grepear `src/` entero y el esquema SQL.
 ## 📚 Referencia
 
 - [[postgres-schema]] — tablas, triggers, RLS, grants y RPCs de Supabase.
+- [[seguridad-checklist]] — qué está cerrado, dónde, y cómo auditarlo.
 - [[indexeddb-stores]] — stores, claves e índices de la base local.
 - [[testing]] — qué cubre cada fichero de test y qué no se puede testear.
 - [[comandos-y-entorno]] — scripts, variables de entorno, Supabase local, trampas del repo.
@@ -69,6 +70,7 @@ barato que grepear `src/` entero y el esquema SQL.
 - [[008-deploy-en-vercel]] — Vercel despliega; la Action de CI es semáforo, no puerta.
 - [[009-la-foto-manda-cierre-mensual]] — patrimonio: cierre por (cuenta, mes) con id determinista, sin lápidas.
 - [[010-modo-demo]] — probar la app sin cuenta: base de IndexedDB aparte y sync apagado.
+- [[011-huella-de-sincronizacion]] — no descargar nada cuando nada ha cambiado (y por qué no es lazy load).
 
 ## Cómo está organizado el grafo
 
