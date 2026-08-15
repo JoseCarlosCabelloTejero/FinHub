@@ -21,6 +21,21 @@ export type MovementRow = { id: string; type: MovementType; amount: number; date
 export type AccountRow = { id: string; name: string; nature: AccountNature; is_investment: boolean; is_liquid: boolean; archived: boolean; order: number; updated_at: string };
 export type ClosingRow = { id: string; account_id: string; month: string; balance: number | null; contributed: number | null; note: string | null; updated_at: string };
 
+// Lista de columnas de cada select del pull, espejo exacto de su *Row. Con select('*') el servidor
+// devolvía además user_id en cada fila: no es un secreto (es tu propio uid, que ya viaja dentro del
+// JWT), pero son bytes en cada pull y no se usa para nada. Lo importante es lo otro: lastPullKey es
+// el JSON de las filas crudas, así que con '*' cualquier columna nueva en el servidor cambiaba la
+// clave y forzaba un repintado espurio en todos los dispositivos. Pidiendo lo que se usa, el cliente
+// solo ve lo que conoce.
+//
+// `order` va sin comillas: la nota 8 del esquema avisa de que choca con el parámetro reservado
+// `order` de PostgREST, pero eso afecta a ORDENAR por él, no a nombrarlo dentro de `select=`.
+const CATEGORY_COLS = 'id,name,type,order,archived,updated_at';
+const SUBCATEGORY_COLS = 'id,category_id,name,order,archived,updated_at';
+const MOVEMENT_COLS = 'id,type,amount,date,category_id,subcategory_id,account_id,concept,notes,created_at,updated_at';
+const ACCOUNT_COLS = 'id,name,nature,is_investment,is_liquid,archived,order,updated_at';
+const CLOSING_COLS = 'id,account_id,month,balance,contributed,note,updated_at';
+
 export interface Snapshot { movements: Movement[]; categories: Category[]; accounts: Account[]; closings: Closing[] }
 
 // El payload del outbox se guarda ya como fila, así que al releerlo hay que estrecharlo de vuelta.
@@ -346,11 +361,11 @@ let lastPullKey: string | null = null;
 
 async function fetchSnapshot() {
   const [movements, categories, subcategories, accounts, closings] = await Promise.all([
-    supabase.from('movements').select('*'),
-    supabase.from('categories').select('*'),
-    supabase.from('subcategories').select('*'),
-    supabase.from('accounts').select('*'),
-    supabase.from('account_closings').select('*'),
+    supabase.from('movements').select(MOVEMENT_COLS),
+    supabase.from('categories').select(CATEGORY_COLS),
+    supabase.from('subcategories').select(SUBCATEGORY_COLS),
+    supabase.from('accounts').select(ACCOUNT_COLS),
+    supabase.from('account_closings').select(CLOSING_COLS),
   ]);
   const failed = [movements, categories, subcategories, accounts, closings].find((result) => result.error);
   if (failed) throw new Error(failed.error?.message ?? 'Error al descargar los datos');
