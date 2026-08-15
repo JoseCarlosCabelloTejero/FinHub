@@ -75,7 +75,42 @@ más **Advisors → Security Advisor** en el dashboard, que es lo que cubre lo d
   GraphQL sobre las mismas tablas; sigue pasando por RLS y por los grants, así que no abre nada, pero
   si no se usa es superficie que se puede cerrar.
 
-## 4. Hallazgo abierto — `signOut` no revoca el refresh token
+## 4. Hallazgo cerrado — `anon` podía ejecutar las funciones en producción
+
+**Encontrado el 2026-08-15 comparando local contra producción, y esta es la lección**: que el SQL diga
+`revoke` no significa que el permiso esté revocado en el proyecto real.
+
+El esquema base previó la trampa **para las tablas** —`revoke all on table ... from public, anon,
+authenticated`, con su comentario sobre los proyectos antiguos y su `ALTER DEFAULT PRIVILEGES`— pero
+**para las funciones solo revocó `from public`**. Revocar de `PUBLIC` no elimina un grant explícito a
+un rol con nombre, así que en un proyecto antiguo `anon` conservaba el `EXECUTE`.
+
+Cómo se ve, llamando a `current_wipe_epoch()` **sin sesión**:
+
+| Entorno | Respuesta | Qué significa |
+|---|---|---|
+| Local (proyecto nuevo) | `permission denied for FUNCTION current_wipe_epoch` | `anon` ni entra |
+| Producción (antiguo) | `permission denied for TABLE sync_meta` | `anon` **pasó** el EXECUTE y falló después |
+
+**No era explotable**, y se comprobó: las dos funciones `security invoker` chocan contra la RLS, y
+`wipe_all_data()` aborta con su guard de `auth.uid() is null`. Pero dejaba la única defensa de una
+función `SECURITY DEFINER` y destructiva en su propio cuerpo, cuando el fichero da a entender que
+también estaba el grant.
+
+> **`wipe_all_data()` no se probó contra producción, ni debe probarse.** El razonamiento dice que sin
+> JWT aborta antes de cualquier `delete`, pero el precio de equivocarse son datos reales. Para
+> ejercerla, base local.
+
+Corregido en `20260815182515_revoke_function_grants_anon.sql`, que nombra los tres roles y vuelve a
+conceder solo a `authenticated`. `iso_now()` sigue sin concederse a nadie (403 desde la API): la usan
+los cuerpos de las funciones definer y el `DEFAULT` de `sync_meta.updated_at`, y en esa tabla solo
+inserta `wipe_all_data()`.
+
+**Ojo al verificarlo**: un proyecto local nuevo **no reproduce la condición**, así que en local solo se
+puede comprobar que no hay regresión. La comprobación de verdad es repetir la llamada de la tabla de
+arriba contra producción después del `db push`.
+
+## 5. Hallazgo abierto — `signOut` no revoca el refresh token
 
 `src/supabase.ts:40` usa `signOut({ scope: 'local' })`. **Es una decisión, no un descuido**: `'global'`
 llama al servidor, así que cerrar sesión dejaría de funcionar sin conexión, y con un solo usuario no
@@ -88,7 +123,7 @@ Alternativa si compensa: intentar `scope: 'global'` y caer a `'local'` cuando fa
 tres líneas. **No se ha cambiado**: es un cambio de comportamiento que merece su propia decisión.
 Mientras tanto, la salida de emergencia es el dashboard (Users → ⋮ → *Sign out user*).
 
-## 5. Bomba de relojería: `max_rows`
+## 6. Bomba de relojería: `max_rows`
 
 El pull es **completo y sin paginar**. PostgREST corta en `max_rows`: **100000** en local
 (`config.toml:23`) y **10000 en producción**. Al superarlo, la respuesta se trunca **en silencio** —

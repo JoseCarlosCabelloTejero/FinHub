@@ -207,9 +207,11 @@ Y una novena que no está en el SQL pero manda igual:
 
 ## Migraciones
 
-Tres: `20260808133140_schema.sql` (esquema base), `20260812173707_patrimonio.sql` (cuentas y cierres;
-también recrea `wipe_all_data()` para que barra las tablas nuevas → [[borrado-total]]) y
-`20260815172816_sync_fingerprint.sql` (el RPC de la huella; no toca ninguna tabla). Las tres terminan
+Cuatro: `20260808133140_schema.sql` (esquema base), `20260812173707_patrimonio.sql` (cuentas y cierres;
+también recrea `wipe_all_data()` para que barra las tablas nuevas → [[borrado-total]]),
+`20260815172816_sync_fingerprint.sql` (el RPC de la huella; no toca ninguna tabla) y
+`20260815182515_revoke_function_grants_anon.sql` (cierra a `anon` el `EXECUTE` de las funciones, que en
+un proyecto antiguo el `revoke ... from public` no le quitaba → [[seguridad-checklist]] §4). Las cuatro terminan
 con `notify pgrst, 'reload schema'`, necesario en un `db push` remoto (`db reset` ya lo hace). Para
 trabajar en local ver [[comandos-y-entorno]].
 
