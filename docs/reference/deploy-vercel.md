@@ -37,6 +37,14 @@ Todo en `vercel.json`, **no en el dashboard**, para que el proyecto se pueda rec
 | `buildCommand` | `npm run build` | incluye el `tsc -b` |
 | `outputDirectory` | `dist` | default de Vite, explícito |
 | `headers` | 4 cabeceras de seguridad | `nosniff`, `DENY`, `Referrer-Policy`, `Permissions-Policy` |
+| `ignoreCommand` | `git diff --quiet HEAD^ HEAD -- . ':(exclude)docs' ':(exclude)README.md'` | salta el build si el commit solo toca `docs/` o `README.md` |
+
+`ignoreCommand` es al revés de lo intuitivo: **exit 0 salta el build, cualquier otro código lo lanza**.
+`git diff --quiet` ya sigue esa convención (0 si no hay diferencias, 1 si las hay), así que basta con
+pedirle el diff **excluyendo** `docs/` y `README.md`: si lo único que cambió está en esas rutas, no hay
+diferencias fuera de ellas y el build se salta. Se aplica igual en push a `main` y en el preview de un PR.
+Si un commit toca `docs/` **y** código a la vez, el diff fuera de esas rutas no está vacío y despliega
+igualmente — la condición es "solo documentación", no "toca documentación".
 
 ⚠️ **No poner el install en modo producción** (`--omit=dev`): `vite.config.ts` importa `defineConfig` de
 `vitest/config`, así que **vitest hace falta en tiempo de build** aunque sea devDependency.
